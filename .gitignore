@@ -1,0 +1,49 @@
+# =========================
+# Segredos e Configurações Locais
+# =========================
+# O MAIS IMPORTANTE: Nunca suba suas chaves e senhas!
+.env
+.env.*
+
+# =========================
+# Ambiente Virtual Python
+# =========================
+# Ignora a pasta inteira onde ficam as bibliotecas instaladas
+venv/
+env/
+.venv/
+
+# =========================
+# Cache e Arquivos Compilados do Python
+# =========================
+# Impede que os arquivos de performance do interpretador poluam os commits
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# =========================
+# Banco de Dados Local 
+# =========================
+# Caso você use SQLite localmente antes de conectar no PostgreSQL definitivo
+*.db
+*.sqlite3
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Configurações de Editores de Código (IDE)
+# =========================
+# Ignora pastas de configuração do VS Code ou derivados
+.vscode/
+.idea/
+
+# =========================
+# Arquivos de Sistema Operacional
+# =========================
+# Lixo gerado por exploradores de arquivos em diferentes OS
+.DS_Store
+Thumbs.db
