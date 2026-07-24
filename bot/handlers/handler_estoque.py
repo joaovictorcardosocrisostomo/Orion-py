@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 # Importando os services
-from services.service_estoque import listar_itens, formatar_mensagem_estoque
+from services.estoque import listar_itens, formatar_mensagem_estoque
 
 router = Router()
 

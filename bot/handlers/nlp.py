@@ -1,9 +1,11 @@
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.filters import StateFilter
 from datetime import datetime
 from services.llm import analisar_intencao
-from services.service_estoque import listar_itens, formatar_mensagem_estoque
+from services.estoque import listar_itens, formatar_mensagem_estoque
 from services.agendamento import criar_reserva
+from services.scheduler import agendar_alarme_inicio
 
 router = Router()
 
@@ -15,7 +17,7 @@ MAPA_CATEGORIAS = {
     "buscar_limpeza": "limpeza"
 }
 
-@router.message(F.text & ~F.text.startswith('/'))
+@router.message(StateFilter(None), F.text & ~F.text.startswith('/'))
 async def chat_natural(message: Message):
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
@@ -68,6 +70,14 @@ async def chat_natural(message: Message):
         
         # 2.4 Responde ao usuário o resultado (sucesso ou conflito!)
         if resposta_db["sucesso"]:
+            # --- LIGANDO O ALARME DE INÍCIO ---
+            agendar_alarme_inicio(
+                dt_inicio, 
+                message.from_user.id, 
+                resposta_db['item_nome'], 
+                resposta_db['reserva'].id
+            )
+            # ----------------------------------
             await message.answer(
                 f"✅ <b>Reserva Confirmada!</b>\n\n"
                 f"⚙️ <b>Item:</b> {resposta_db['item_nome']}\n"

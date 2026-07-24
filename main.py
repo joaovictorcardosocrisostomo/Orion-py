@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import logging # só pra exibir mensagem no terminal
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from aiogram import Bot, Dispatcher
@@ -9,7 +9,8 @@ from aiogram.client.default import DefaultBotProperties
 # Importações internas
 from core.config import settings
 from database.db import init_db, reset_db
-from bot.handlers import handler_estoque, start, nlp
+from bot.handlers import handler_estoque, nlp, onboarding, experimento, relatorio
+from services.scheduler import iniciar_scheduler
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -20,13 +21,17 @@ dp = Dispatcher()
 
 # Handlers - transferidos pra pasta bot em forma de Routers
 # Conectando routers ao dispatcher
-dp.include_router(start.router)
+dp.include_router(onboarding.router)
 dp.include_router(handler_estoque.router)
+dp.include_router(relatorio.router)
 dp.include_router(nlp.router)
+dp.include_router(experimento.router)
 
 # Função que mantém o bot rodando em segundo plano
 async def run_bot():
     logging.info("Iniciando Polling do Telegram...")
+    # ⏰ LIGA O RELÓGIO AQUI, PASSANDO A INSTÂNCIA DO BOT!
+    iniciar_scheduler(bot)
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
     

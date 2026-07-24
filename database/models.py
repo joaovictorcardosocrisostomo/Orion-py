@@ -29,6 +29,8 @@ class StatusReserva(str, Enum):
     CONCLUIDO = "Concluído"
     CANCELADO = "Cancelado"
     CONFLITO = "Em conflito"
+    EM_ANDAMENTO = "Em andamento"
+    NAO_REALIZADO = "Não Realizado"
 
 # --- Tabelas Principais ---
 

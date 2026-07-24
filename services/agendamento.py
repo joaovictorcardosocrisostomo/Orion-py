@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlmodel import Session, select
 from database.db import engine
-from database.models import Reserva, Usuario, Item, StatusReserva, CategoriaItem
+from database.models import Reserva, Usuario, Item, StatusReserva, CategoriaItem, NivelAcesso
 
 def verificar_conflito(item_id: uuid.UUID, data_inicio: datetime, data_fim: datetime) -> bool:
     """Verifica se já existe uma reserva que cruza com o horário solicitado."""
@@ -54,3 +54,39 @@ def criar_reserva(telegram_id: int, item_id: uuid.UUID, data_inicio: datetime, d
         session.refresh(nova_reserva)
         
         return {"sucesso": True, "reserva": nova_reserva, "item_nome": item.nome}
+    
+def cancelar_reserva(reserva_id: uuid.UUID, telegram_id_solicitante: int) -> dict:
+    """Cancela uma reserva e valida se o solicitante tem permissão (Dono ou Admin)."""
+    with Session(engine) as session:
+        reserva = session.get(Reserva, reserva_id)
+        # Agora permite cancelar tanto os agendados quanto os que estão rodando!
+        if not reserva or reserva.status not in [StatusReserva.AGENDADO, StatusReserva.EM_ANDAMENTO]:
+            return {"sucesso": False, "erro": "Reserva não encontrada ou já finalizada."}
+
+        solicitante = session.get(Usuario, telegram_id_solicitante)
+        dono_reserva = session.get(Usuario, reserva.usuario_id)
+        item = session.get(Item, reserva.item_id)
+
+        # 🛡️ BARREIRA DE SEGURANÇA (RBAC)
+        # Se quem está pedindo o cancelamento não é o dono E também não é Admin, bloqueia.
+        if reserva.usuario_id != telegram_id_solicitante and solicitante.nivel_acesso != NivelAcesso.ADMIN:
+            return {"sucesso": False, "erro": "Permissão negada. Apenas Administradores podem cancelar agendamentos de outros membros."}
+
+        # Executa o cancelamento
+        reserva.status = StatusReserva.CANCELADO
+        # Libera o equipamento de volta para o estado Bom
+        item = session.get(Item, reserva.item_id)
+        if item:
+            item.estado = "Bom"
+        session.commit()
+
+        # Verifica se precisamos notificar o dono (Acontece quando o Admin cancela a reserva de outro)
+        foi_admin_terceiro = (reserva.usuario_id != telegram_id_solicitante)
+
+        return {
+            "sucesso": True,
+            "item_nome": item.nome,
+            "dono_id": dono_reserva.telegram_id,
+            "solicitante_nome": solicitante.nome,
+            "foi_admin_terceiro": foi_admin_terceiro
+        }

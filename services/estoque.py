@@ -1,23 +1,45 @@
 # lida com manipulações e leitura de estoque
+import unicodedata
 from sqlmodel import Session, select
 from database.db import engine
 from database.models import Item, Laboratorio, CategoriaItem
 
+def normalizar_texto(texto: str) -> str:
+    """Remove acentos, hífens e deixa tudo minúsculo para a busca."""
+    if not texto:
+        return ""
+    # Remove os acentos da string
+    texto_sem_acento = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
+    # Troca o hífen por espaço e deixa minúsculo
+    return texto_sem_acento.replace("-", " ").lower()
+
 def listar_itens(termo_busca: str = None, categoria: str = None):
-    """Busca itens com filtro opcional de categoria."""
+    """Busca itens com filtro opcional de categoria, imune a acentos e hífens."""
     with Session(engine) as session:
         statement = select(Item, Laboratorio).join(Laboratorio, isouter=True)
         
-        if termo_busca:
-            statement = statement.where(Item.nome.ilike(f"%{termo_busca}%"))
-            
+        # Filtra a categoria direto no SQL (isso é rápido e exato)
         if categoria:
             statement = statement.where(Item.categoria == categoria)
             
-        # Limite para não explodir a mensagem no Telegram
-        statement = statement.limit(15)
+        todos_itens = session.exec(statement).all()
         
-        return session.exec(statement).all()
+        # Filtra o nome com Inteligência no Python
+        if termo_busca:
+            termo_limpo = normalizar_texto(termo_busca)
+            resultados_filtrados = []
+            
+            for item, lab in todos_itens:
+                nome_item_limpo = normalizar_texto(item.nome)
+                
+                # Se a palavra buscada estiver dentro do nome do item
+                if termo_limpo in nome_item_limpo:
+                    resultados_filtrados.append((item, lab))
+                    
+            # Limite para não explodir a mensagem no Telegram
+            return resultados_filtrados[:15]
+            
+        return todos_itens[:15]
     
 def formatar_mensagem_estoque(resultados, termo_busca: str = None) -> str:
     """Recebe a lista do banco de dados e transforma no texto final do Telegram."""
