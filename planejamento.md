@@ -169,6 +169,73 @@ Este é o ápice do sistema, dividido em 4 etapas:
 
 4. **Negociação e *Commit*:** O usuário pode responder *"Vou usar 2 balões em vez de 1 e não preciso calibrar"*. O LLM ajusta, pede confirmação final e, ao receber o "Ok", dispara as funções de escrita no banco de dados, "trancando" todos aqueles recursos para o usuário naquelas janelas de tempo de uma só vez.
 
+### Módulo F: Comando `/experimento` — Planejamento Experimental Manual
+
+O comando `/experimento` é a porta de entrada direta para o planejamento experimental no Orion, oferecendo uma versão estendida do fluxo relâmpago já existente. Enquanto o `/hoje` gerencia o que já está agendado, o `/experimento` **guia o usuário do zero até a execução** de um experimento.
+
+**Fluxo do `/experimento`:**
+
+1. **Início:** O usuário digita `/experimento` e o bot pergunta qual equipamento será utilizado.
+2. **Seleção de Equipamento:** O usuário digita o nome. O sistema busca no banco e retorna o equipamento mais relevante.
+   * *Validação:* Se o equipamento estiver em uso por outra pessoa, o sistema informa e bloqueia.
+3. **Definição de Duração:** Botões de 1 a 4 horas (igual ao fluxo relâmpago), mas aqui o usuário também pode digitar um tempo personalizado em minutos.
+4. **Confirmação de Recursos (Pré-RAG):** Nesta versão manual, o bot pergunta:
+   * *"Quais reagentes e vidrarias você vai usar?"* (campo de texto livre)
+   * O usuário lista os itens, e o sistema registra essa intenção no banco (tabela `LogUso` ou uma nova `Experimento`).
+   * O sistema valida se cada item citado existe no inventário e alerta se algo estiver em falta.
+5. **Início Imediato:** Após confirmar tudo, a reserva é criada com status **EM_ANDAMENTO**, o equipamento é marcado como "Em uso", e o alarme de fim é disparado.
+6. **Finalização:** Ao terminar, o bot pergunta:
+   * ✅ Como ficou o estado do equipamento (Bom / Avaria)?
+   * ✅ Quanto de cada reagente foi consumido?
+   * ✅ Algo foi descartado? Precisa de reposição?
+   * Os dados são registrados na tabela `LogUso` e o estoque é atualizado automaticamente.
+
+**Diferenças chave para o relâmpago:**
+| Característica | `/hoje` (Relâmpago) | `/experimento` |
+|---|---|---|
+| Equipamento | Apenas 1 | 1 principal + lista de insumos |
+| Registro de consumo | ❌ Não | ✅ Reagentes, descartes, reposição |
+| Vínculo com RAG | ❌ | ✅ Futuramente engatilha o Módulo E |
+| Protocolo salvo | ❌ | ✅ Gera um protocolo experimental reutilizável |
+
+---
+
+### ⚙️ Nota Arquitetural: Todas as Funções como Blocos para Orquestração por LLM
+
+É fundamental registrar que **todas as funções e serviços que estamos construindo** (agendamento, estoque, relatório, scheduler, FSM de experimento, relatório de avarias) **não são fins em si mesmos** — são **building blocks** que a LLM orquestrará via *function calling* no futuro.
+
+**Funções que a LLM precisará chamar:**
+
+| Função | Serviço | Descrição |
+|---|---|---|
+| `buscar_reagente` | `services/estoque.py` | Busca reagente no inventário |
+| `buscar_equipamento` | `services/estoque.py` | Busca equipamento no inventário |
+| `buscar_vidraria` | `services/estoque.py` | Busca vidraria no inventário |
+| `buscar_limpeza` | `services/estoque.py` | Busca material de limpeza |
+| `registrar_agendamento` | `services/agendamento.py` | Cria uma reserva no banco |
+| `cancelar_agendamento` | `services/agendamento.py` | Cancela uma reserva |
+| `registrar_consumo` | (futuro) | Dá baixa em reagente consumido |
+| `registrar_descarte` | (futuro) | Registra descarte de material |
+| `registrar_reposicao` | (futuro) | Sinaliza necessidade de reposição |
+| `consultar_rag` | `services/rag.py` | Busca POPs/artigos no banco vetorial |
+| `criar_protocolo` | (futuro) | Salva um protocolo experimental |
+
+**Fluxo futuro (Sprint 6):**
+```
+Usuário: "Vou fazer análise de Ferro amanhã"
+  → LLM recebe a mensagem
+  → LLM chama consultar_rag("análise de Ferro")
+  → RAG retorna: "Método da Fenantrolina (POP-042)"
+  → LLM identifica recursos: UV-Vis, Fenantrolina, Ácido Acético, Balão 60mL
+  → LLM chama buscar_equipamento("UV-Vis") → "Disponível no Croma"
+  → LLM chama buscar_reagente("Fenantrolina") → "325g no LAT, bancada 4"
+  → LLM chama registrar_agendamento(item, inicio, fim) para CADA recurso
+  → LLM pergunta: "Vou reservar tudo isso. Confirma?"
+  → Usuário confirma → sistema executa todas as reservas atômicas
+```
+
+Quando o RAG for ativado, o **Módulo E** (planejamento via IA) e o **Módulo F** (comando manual `/experimento`) se fundirão: o `/experimento` será o atalho para disparar todo o pipeline RAG + agendamento automático.
+
 ---
 
 ## 4. Plano de Execução (Roadmap de Construção)
@@ -198,6 +265,38 @@ Para construirmos isso de forma organizada, proponho dividirmos o código em Spr
 * Configurar o banco vetorial e inserir os primeiros POPs (documentos em PDF/texto).
 * Criar a cadeia de *prompt* avançada que cruza o documento RAG com a disponibilidade em tempo real dos itens do banco de dados.
 
+* **Sprint 6: Orquestração Total Via LLM + RAG (Planejamento Experimental Inteligente)**
+*Esta sprint unifica todas as anteriores e entrega o ápice do sistema: a LLM orquestrando todo o fluxo experimental via linguagem natural.*
 
+**Objetivo:** Permitir que o usuário diga em linguagem natural o que quer fazer (ex: *"Vou fazer uma análise de quantificação de Ferro"*) e o Orion:
+1. **Consulte o RAG** (`services/rag.py`) — busca nos POPs, artigos e livros dos laboratórios pelo método descrito para aquela análise.
+2. **Extraia os recursos necessários** — o LLM identifica no documento quais reagentes, vidrarias e equipamentos são necessários.
+3. **Cruze com o inventário real** — para cada recurso identificado, chama `buscar_*` para ver:
+   * Se o item existe no estoque
+   * Em qual laboratório está (POA, LAT, Croma, Lanagua, LabITech)
+   * Se está disponível ou em uso
+   * A quantidade/disponibilidade atual
+4. **Monte o plano experimental** — o LLM propõe um cronograma com etapas, horários e alocação de recursos, negociando com o usuário.
+5. **Execute as reservas** — após confirmação, chama:
+   * `registrar_agendamento` para cada equipamento
+   * `registrar_consumo` para cada reagente (já com previsão de quanto será usado)
+   * `registrar_descarte` se o método prevê descarte
+   * `registrar_reposicao` se algo precisa ser reposto
+6. **Monitore e registre** — ao final do experimento, o sistema pergunta:
+   * Quanto foi realmente consumido de cada reagente (ajuste fino)
+   * Houve desvio do protocolo?
+   * O equipamento foi devolvido em bom estado?
+   * Precisa repor algo?
 
-Você está pronto para começarmos pelo **Sprint 1**, alterando oficialmente os modelos do banco de dados para suportarem todo esse grau de detalhamento exigido pelos módulos futuros?
+**Novas ferramentas necessárias no LLM (function calling):**
+* `consultar_rag(termo_busca)` — busca vetorial por similaridade no banco de conhecimento
+* `registrar_consumo(item_id, quantidade, unidade)` — dá baixa em reagente
+* `registrar_descarte(item_id, quantidade, motivo)` — registra descarte
+* `registrar_reposicao(item_id, quantidade_necessaria)` — sinaliza compra
+* `criar_protocolo_experimental(plano_json)` — salva o protocolo para reuso futuro
+
+**Nova tabela no banco:**
+* **`ProtocoloExperimental`** — armazena protocolos salvos (título, descrição, etapas, recursos, duração estimada) para reuso e versionamento.
+
+**Integração com `/experimento`:**
+Quando o Sprint 6 estiver pronto, o comando `/experimento` ganhará um **modo inteligente**: se o RAG tiver um documento relevante para o que o usuário quer fazer, o sistema sugerirá o protocolo completo — se não, cai no fluxo manual do Módulo F.

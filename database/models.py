@@ -107,6 +107,7 @@ class LogUso(SQLModel, table=True):
     data_uso: datetime = Field(default_factory=datetime.utcnow)
     estado_devolvido: StatusItem
     observacoes: Optional[str] = None # Ex: "Foi necessário descartar", "Vidraria quebrou"
+    reposicao_necessaria: bool = Field(default=False) # Se True, admin pode filtrar itens a comprar
     
     usuario: Usuario = Relationship(back_populates="logs_uso")
     item: Item = Relationship(back_populates="logs_uso")

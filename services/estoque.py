@@ -1,4 +1,5 @@
 # lida com manipulações e leitura de estoque
+import uuid
 import unicodedata
 from sqlmodel import Session, select
 from database.db import engine
@@ -74,3 +75,19 @@ def formatar_mensagem_estoque(resultados, termo_busca: str = None) -> str:
         texto += f"  Estado: <i>{item.estado.value}</i>\n\n"
         
     return texto
+
+def atualizar_quantidade(item_id: uuid.UUID, quantidade: float) -> bool:
+    """Decrementa a quantidade atual de um item. Se zerar, marca como ESGOTADO."""
+    from database.models import StatusItem
+    with Session(engine) as session:
+        item = session.get(Item, item_id)
+        if not item:
+            return False
+
+        item.quantidade_atual = max(0.0, item.quantidade_atual - quantidade)
+
+        if item.quantidade_atual <= 0:
+            item.estado = StatusItem.ESGOTADO
+
+        session.commit()
+        return True
