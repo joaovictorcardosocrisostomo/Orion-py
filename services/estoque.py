@@ -14,7 +14,7 @@ def normalizar_texto(texto: str) -> str:
     # Troca o hífen por espaço e deixa minúsculo
     return texto_sem_acento.replace("-", " ").lower()
 
-def listar_itens(termo_busca: str = None, categoria: str = None):
+def listar_itens(termo_busca: str | None = None, categoria: str | None = None):
     """Busca itens com filtro opcional de categoria, imune a acentos e hífens."""
     with Session(engine) as session:
         statement = select(Item, Laboratorio).join(Laboratorio, isouter=True)
@@ -42,7 +42,7 @@ def listar_itens(termo_busca: str = None, categoria: str = None):
             
         return todos_itens[:15]
     
-def formatar_mensagem_estoque(resultados, termo_busca: str = None) -> str:
+def formatar_mensagem_estoque(resultados, termo_busca: str | None = None) -> str:
     """Recebe a lista do banco de dados e transforma no texto final do Telegram."""
     if not resultados:
         if termo_busca:

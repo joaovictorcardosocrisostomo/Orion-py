@@ -7,7 +7,7 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from database.db import engine
 from database.models import Item, StatusItem, CategoriaItem, Reserva, StatusReserva
@@ -150,11 +150,19 @@ async def _persistir_e_perguntar_continuar(
             parse_mode="HTML"
         )
     else:
+        if target.message is None:
+            return
         chat_id = target.message.chat.id
-        await target.message.edit_text(
-            f"✅ <b>Registrado!</b>\n{resumo_linha}",
-            parse_mode="HTML"
-        )
+        if isinstance(target.message, Message):
+            await target.message.edit_text(
+                f"✅ <b>Registrado!</b>\n{resumo_linha}",
+                parse_mode="HTML"
+            )
+        else:
+            await target.answer(
+                f"✅ Registrado! {resumo_linha}",
+                show_alert=True,
+            )
 
     # 6. Pergunta se quer continuar
     await bot.send_message(
@@ -171,6 +179,9 @@ async def _montar_resumo_e_encerrar(
     state: FSMContext,
 ):
     """Exibe resumo final com todos os itens reportados e encerra a FSM."""
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     dados = await state.get_data()
     itens = dados.get("itens_reportados", [])
 
@@ -198,6 +209,9 @@ async def _montar_resumo_e_encerrar(
 # ===================================================================
 @router.callback_query(F.data == "uso_sim")
 async def auditoria_inicio(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "✍️ <b>Auditoria de Itens</b>\n\n"
         "Qual item (equipamento, reagente, vidraria ou material de limpeza) "
@@ -213,6 +227,9 @@ async def auditoria_inicio(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(F.data == "uso_nao")
 async def auditoria_nao_usou(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "✅ <b>Auditoria concluída!</b>\n\n"
         "Nenhum item foi registrado para hoje.\n"
@@ -226,6 +243,8 @@ async def auditoria_nao_usou(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.message(FSMAuditoria.aguardando_item)
 async def auditoria_buscar_item(message: Message, state: FSMContext):
+    if message.text is None:
+        return
     termo = message.text.strip()
     if not termo:
         await message.answer("Por favor, digite o nome do item que você usou.")
@@ -267,6 +286,9 @@ async def auditoria_buscar_item(message: Message, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.confirmar_item, F.data == "confirmar_item_sim")
 async def auditoria_confirmar_item(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     dados = await state.get_data()
     categoria = dados["categoria"]
     nome_item = dados["nome_item"]
@@ -297,6 +319,9 @@ async def auditoria_confirmar_item(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.confirmar_item, F.data == "confirmar_item_nao")
 async def auditoria_buscar_outro(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "✍️ Digite o nome do item novamente:",
         parse_mode="HTML"
@@ -308,6 +333,8 @@ async def auditoria_buscar_outro(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.message(FSMAuditoria.aguardando_qtd)
 async def auditoria_quantidade(message: Message, state: FSMContext):
+    if message.text is None:
+        return
     try:
         quantidade = float(message.text.strip().replace(",", "."))
     except ValueError:
@@ -335,6 +362,9 @@ async def auditoria_quantidade(message: Message, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.aguardando_estado, F.data.in_(["estado_bom", "estado_avaria"]))
 async def auditoria_estado(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     dados = await state.get_data()
     nome_item = dados["nome_item"]
     categoria = dados["categoria"]
@@ -357,6 +387,9 @@ async def auditoria_estado(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.aguardando_obs, F.data == "obs_digitar")
 async def auditoria_obs_digitar(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "✍️ Digite sua observação abaixo:",
         parse_mode="HTML"
@@ -367,6 +400,8 @@ async def auditoria_obs_digitar(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.aguardando_obs, F.data == "pular_obs")
 async def auditoria_obs_pular(callback: CallbackQuery, state: FSMContext):
+    if callback.bot is None:
+        return
     await _persistir_e_perguntar_continuar(
         target=callback,
         state=state,
@@ -379,6 +414,10 @@ async def auditoria_obs_pular(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.message(FSMAuditoria.aguardando_obs)
 async def auditoria_obs_texto(message: Message, state: FSMContext):
+    if message.text is None or message.from_user is None:
+        return
+    if message.bot is None:
+        return
     texto_obs = message.text.strip()
     await state.update_data(observacao=texto_obs)
     await _persistir_e_perguntar_continuar(
@@ -393,6 +432,9 @@ async def auditoria_obs_texto(message: Message, state: FSMContext):
 # ===================================================================
 @router.callback_query(FSMAuditoria.aguardando_continuar, F.data == "mais_item_sim")
 async def auditoria_mais_item(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "✍️ Digite o nome do próximo item que você usou:",
         parse_mode="HTML"
@@ -411,6 +453,9 @@ async def auditoria_encerrar(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(F.data == "experimento_sim")
 async def experimento_sim(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     await callback.message.edit_text(
         "🧪 Que bom que conseguiu fazer o experimento! "
         "Vamos registrar os itens utilizados.\n\n"
@@ -425,18 +470,24 @@ async def experimento_sim(callback: CallbackQuery, state: FSMContext):
 # ===================================================================
 @router.callback_query(F.data == "experimento_nao")
 async def experimento_nao(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
     usuario_id = callback.from_user.id
     tz = pytz.timezone("America/Fortaleza")
     hoje_inicio = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
     hoje_fim = hoje_inicio.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     with Session(engine) as session:
-        reservas = session.query(Reserva).filter(
-            Reserva.usuario_id == usuario_id,
-            Reserva.data_inicio >= hoje_inicio,
-            Reserva.data_fim <= hoje_fim,
-            Reserva.status == StatusReserva.AGENDADO,
-        ).all()
+        # Filtra no Python a coluna usuario_id (sa_column BigInteger quebra a
+        # inferência do Pylance); datas e status no SQL
+        statement = select(Reserva).where(
+            (Reserva.data_inicio >= hoje_inicio) &
+            (Reserva.data_fim <= hoje_fim) &
+            (Reserva.status == StatusReserva.AGENDADO)
+        )
+        reservas = session.exec(statement).all()
+        reservas = [r for r in reservas if r.usuario_id == usuario_id]
 
         if not reservas:
             await callback.message.edit_text(

@@ -1,9 +1,10 @@
 import uuid
 from typing import Optional, List
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey
+from pgvector.sqlalchemy import Vector
 
 # --- Enums para Padronização Restrita ---
 # Isso impede que alguém digite "Admim" ou "Menbro" errado no banco
@@ -104,7 +105,7 @@ class LogUso(SQLModel, table=True):
     item_id: uuid.UUID = Field(foreign_key="item.id")
     
     quantidade_utilizada: float
-    data_uso: datetime = Field(default_factory=datetime.utcnow)
+    data_uso: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     estado_devolvido: StatusItem
     observacoes: Optional[str] = None # Ex: "Foi necessário descartar", "Vidraria quebrou"
     reposicao_necessaria: bool = Field(default=False) # Se True, admin pode filtrar itens a comprar
@@ -117,5 +118,20 @@ class ProcedimentoRAG(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     titulo_documento: str
     conteudo_texto: str
-    # O pgvector será ativado aqui no futuro, deixamos como str para o MVP
-    embedding: Optional[str] = None
+    # Pydantic vê list[float] para validação; SQLAlchemy usa Vector(768) do pgvector
+    embedding: list[float] = Field(sa_column=Column(Vector(768)))
+
+
+class ProtocoloExperimental(SQLModel, table=True):
+    """Protocolos experimentais salvos para reuso e versionamento (Sprint 6)."""
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    titulo: str
+    descricao: Optional[str] = None
+    etapas: str  # Etapas do procedimento, uma por linha
+    recursos: Optional[str] = None  # Lista separada por vírgula
+    duracao_estimada_min: Optional[int] = None
+    versao: int = Field(default=1)
+    criado_por: Optional[int] = Field(
+        default=None, sa_column=Column(BigInteger, ForeignKey("usuario.telegram_id"))
+    )
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

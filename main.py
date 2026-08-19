@@ -9,7 +9,7 @@ from aiogram.client.default import DefaultBotProperties
 # Importações internas
 from core.config import settings
 from database.db import init_db, reset_db
-from bot.handlers import handler_estoque, nlp, onboarding, experimento, relatorio, auditoria
+from bot.handlers import handler_estoque, nlp, onboarding, experimento, relatorio, auditoria, adicionar_pop
 from services.scheduler import iniciar_scheduler
 
 # Logging
@@ -27,6 +27,7 @@ dp.include_router(relatorio.router)
 dp.include_router(nlp.router)
 dp.include_router(experimento.router)
 dp.include_router(auditoria.router)
+dp.include_router(adicionar_pop.router)
 
 # Função que mantém o bot rodando em segundo plano
 async def run_bot():

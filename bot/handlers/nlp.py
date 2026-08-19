@@ -2,96 +2,238 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import StateFilter
 from datetime import datetime
-from services.llm import analisar_intencao
-from services.estoque import listar_itens, formatar_mensagem_estoque
+from services.llm import executar_loop_funcoes, sintetizar_com_rag
+from services.estoque import listar_itens, formatar_mensagem_estoque, atualizar_quantidade
 from services.agendamento import criar_reserva
+from services.rag import formatar_contexto_rag
+from services.log_uso import registrar_log_uso
+from services.protocolo import criar_protocolo_experimental, formatar_protocolo
 from services.scheduler import agendar_alarme_inicio
+from database.models import StatusItem
 
 router = Router()
 
-# Dicionário de conversão: Função do LLM -> Categoria no Banco
-MAPA_CATEGORIAS = {
-    "buscar_reagente": "reagente",
-    "buscar_equipamento": "equipamento",
-    "buscar_vidraria": "vidraria",
-    "buscar_limpeza": "limpeza"
+
+# ════════════════════════════════════════════════════════════════════
+# IMPLEMENTAÇÕES REAIS DAS FERRAMENTAS (executor do loop de tools)
+# Cada função recebe (args: dict, telegram_id: int) e retorna str.
+# ════════════════════════════════════════════════════════════════════
+
+def _buscar_item_por_termo(termo: str, categoria: str | None = None):
+    """Busca um item no estoque. Retorna (item, lab) ou None."""
+    resultados = listar_itens(termo_busca=termo, categoria=categoria)
+    if not resultados:
+        return None
+    return resultados[0]
+
+
+async def _tool_buscar(termo: str, categoria: str) -> str:
+    """Consulta genérica de estoque (reagente/equipamento/vidraria/limpeza)."""
+    resultados = listar_itens(termo_busca=termo, categoria=categoria)
+    return formatar_mensagem_estoque(resultados, termo)
+
+
+async def executor_buscar_reagente(args: dict, telegram_id: int) -> str:
+    return await _tool_buscar(args.get("termo", ""), "reagente")
+
+
+async def executor_buscar_equipamento(args: dict, telegram_id: int) -> str:
+    return await _tool_buscar(args.get("termo", ""), "equipamento")
+
+
+async def executor_buscar_vidraria(args: dict, telegram_id: int) -> str:
+    return await _tool_buscar(args.get("termo", ""), "vidraria")
+
+
+async def executor_buscar_limpeza(args: dict, telegram_id: int) -> str:
+    return await _tool_buscar(args.get("termo", ""), "limpeza")
+
+
+async def executor_registrar_agendamento(args: dict, telegram_id: int) -> str:
+    termo = args.get("termo_equipamento", "")
+    inicio_str = args.get("data_inicio_iso", "")
+    fim_str = args.get("data_fim_iso", "")
+
+    if not all([termo, inicio_str, fim_str]):
+        return "❌ Faltam informações para agendar (item, data de início e fim)."
+
+    try:
+        dt_inicio = datetime.strptime(inicio_str, "%Y-%m-%d %H:%M")
+        dt_fim = datetime.strptime(fim_str, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return "❌ Não consegui entender o formato das datas. Use: YYYY-MM-DD HH:MM."
+
+    encontrado = _buscar_item_por_termo(termo, "equipamento")
+    if not encontrado:
+        # Tenta sem filtro de categoria (pode ser vidraria etc.)
+        encontrado = _buscar_item_por_termo(termo)
+    if not encontrado:
+        return f"❌ Não encontrei nenhum item parecido com '{termo}' no sistema."
+
+    item_obj = encontrado[0]
+    resposta_db = criar_reserva(
+        telegram_id=telegram_id,
+        item_id=item_obj.id,
+        data_inicio=dt_inicio,
+        data_fim=dt_fim,
+    )
+
+    if resposta_db["sucesso"]:
+        agendar_alarme_inicio(
+            dt_inicio,
+            telegram_id,
+            resposta_db["item_nome"],
+            resposta_db["reserva"].id,
+        )
+        return (
+            f"✅ Reserva confirmada!\n"
+            f"Item: {resposta_db['item_nome']}\n"
+            f"Início: {dt_inicio.strftime('%d/%m/%Y às %H:%M')}\n"
+            f"Término: {dt_fim.strftime('%d/%m/%Y às %H:%M')}"
+        )
+    return f"❌ Erro na reserva: {resposta_db['erro']}"
+
+
+async def executor_consultar_rag(args: dict, telegram_id: int) -> str:
+    termo = args.get("termo_busca", "")
+    if not termo:
+        return "Sobre qual procedimento você quer saber?"
+
+    contexto = formatar_contexto_rag(termo, limite=3)
+    if not contexto:
+        return (
+            f"🔍 Não encontrei nenhum procedimento relacionado a '{termo}' "
+            f"no banco de conhecimento do laboratório."
+        )
+
+    return await sintetizar_com_rag(
+        pergunta_usuario=f"Busquei '{termo}'. Resuma o procedimento encontrado.",
+        contexto_rag=contexto,
+        telegram_id=telegram_id,
+    )
+
+
+async def _tool_movimentar_estoque(
+    args: dict,
+    telegram_id: int,
+    observacoes: str,
+    estado: StatusItem,
+    reposicao: bool = False,
+) -> str:
+    """Base comum para consumo / descarte / reposição."""
+    termo = args.get("termo_item", "")
+    quantidade = float(args.get("quantidade", 0) or 0)
+
+    if not termo:
+        return "❌ Preciso do nome do item para executar esta ação."
+
+    encontrado = _buscar_item_por_termo(termo)
+    if not encontrado:
+        return f"❌ Não encontrei nenhum item parecido com '{termo}' no sistema."
+
+    item_obj = encontrado[0]
+
+    if quantidade > 0:
+        atualizar_quantidade(item_obj.id, quantidade)
+
+    log, nome_item = registrar_log_uso(
+        usuario_id=telegram_id,
+        item_id=item_obj.id,
+        quantidade=quantidade,
+        estado=estado,
+        observacoes=observacoes or None,
+        reposicao_necessaria=reposicao,
+    )
+    return (
+        f"✅ Registrado!\n"
+        f"Item: {nome_item}\n"
+        f"Quantidade: {quantidade} {item_obj.unidade_medida}\n"
+        f"Observação: {observacoes or '—'}"
+    )
+
+
+async def executor_registrar_consumo(args: dict, telegram_id: int) -> str:
+    qtd = args.get("quantidade", 0)
+    obs = f"Consumo: {qtd} {args.get('unidade', '')}".strip()
+    return await _tool_movimentar_estoque(
+        args, telegram_id,
+        observacoes=obs if qtd else "Uso registrado (sem consumo)",
+        estado=StatusItem.BOM,
+    )
+
+
+async def executor_registrar_descarte(args: dict, telegram_id: int) -> str:
+    motivo = args.get("motivo", "Descarte registrado")
+    return await _tool_movimentar_estoque(
+        args, telegram_id,
+        observacoes=f"Descartado: {motivo}",
+        estado=StatusItem.QUEBRADO,
+    )
+
+
+async def executor_registrar_reposicao(args: dict, telegram_id: int) -> str:
+    qtd_necessaria = args.get("quantidade_necessaria", 0)
+    return await _tool_movimentar_estoque(
+        args, telegram_id,
+        observacoes=f"Precisa repor {qtd_necessaria} (verificar quantidade disponível)",
+        estado=StatusItem.BOM,
+        reposicao=True,
+    )
+
+
+async def executor_criar_protocolo_experimental(args: dict, telegram_id: int) -> str:
+    titulo = args.get("titulo", "")
+    etapas = args.get("etapas", "")
+    if not titulo or not etapas:
+        return "❌ Preciso de título e etapas para salvar o protocolo."
+
+    protocolo = criar_protocolo_experimental(
+        titulo=titulo,
+        descricao=args.get("descricao"),
+        etapas=etapas,
+        recursos=args.get("recursos"),
+        duracao_estimada_min=args.get("duracao_estimada_min"),
+        criado_por=telegram_id,
+    )
+    return (
+        f"✅ Protocolo salvo!\n"
+        f"{formatar_protocolo(protocolo)}"
+    )
+
+
+# ════════════════════════════════════════════════════════════════════
+# EXECUTOR — mapeia o nome da tool para a implementação real
+# ════════════════════════════════════════════════════════════════════
+EXECUTOR = {
+    "buscar_reagente": executor_buscar_reagente,
+    "buscar_equipamento": executor_buscar_equipamento,
+    "buscar_vidraria": executor_buscar_vidraria,
+    "buscar_limpeza": executor_buscar_limpeza,
+    "registrar_agendamento": executor_registrar_agendamento,
+    "consultar_rag": executor_consultar_rag,
+    "registrar_consumo": executor_registrar_consumo,
+    "registrar_descarte": executor_registrar_descarte,
+    "registrar_reposicao": executor_registrar_reposicao,
+    "criar_protocolo_experimental": executor_criar_protocolo_experimental,
 }
+
 
 @router.message(StateFilter(None), F.text & ~F.text.startswith('/'))
 async def chat_natural(message: Message):
-    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    
-    # ATENÇÃO: Passando o ID do usuário para a memória funcionar!
-    resultado = await analisar_intencao(message.text, message.from_user.id)
-    
-    # 1. Verifica se a IA chamou função e se o nome existe no nosso MAPA
-    if resultado["tipo"] == "funcao" and resultado["nome"] in MAPA_CATEGORIAS:
-        termo_busca = resultado["args"].get("termo")
-        categoria_bd = MAPA_CATEGORIAS[resultado["nome"]]
-        
-        # Faz a busca passando a categoria!
-        resultados_banco = listar_itens(termo_busca=termo_busca, categoria=categoria_bd)
-        
-        # Formata e envia
-        texto_final = formatar_mensagem_estoque(resultados_banco, termo_busca)
-        await message.answer(texto_final, parse_mode="HTML")
-       
-    # 2. FUNÇÃO DE AGENDAMENTO
-    elif resultado["tipo"] == "funcao" and resultado["nome"] == "registrar_agendamento":
-        args = resultado["args"]
-        termo = args.get("termo_equipamento")
-        inicio_str = args.get("data_inicio_iso")
-        fim_str = args.get("data_fim_iso")
-        
-        # 2.1 A IA mandou as datas como texto (ISO). O Python precisa transformar em Data real.
-        try:
-            dt_inicio = datetime.strptime(inicio_str, "%Y-%m-%d %H:%M")
-            dt_fim = datetime.strptime(fim_str, "%Y-%m-%d %H:%M")
-        except ValueError:
-            await message.answer("Tive dificuldade em entender o formato da data.")
-            return
+    if message.bot is None or message.from_user is None or message.text is None:
+        return
 
-        # 2.2 Busca o UUID do equipamento solicitado no banco
-        resultados_banco = listar_itens(termo_busca=termo)
-        if not resultados_banco:
-            await message.answer(f"Não encontrei nenhum equipamento parecido com '{termo}' no sistema.")
-            return
-            
-        # Pega o primeiro item da busca (resultados_banco é uma lista de tuplas [(Item, Lab)])
-        item_obj = resultados_banco[0][0] 
-        
-        # 2.3 Aciona o banco de dados passando o UUID real
-        resposta_db = criar_reserva(
-            telegram_id=message.from_user.id,
-            item_id=item_obj.id,
-            data_inicio=dt_inicio,
-            data_fim=dt_fim
-        )
-        
-        # 2.4 Responde ao usuário o resultado (sucesso ou conflito!)
-        if resposta_db["sucesso"]:
-            # --- LIGANDO O ALARME DE INÍCIO ---
-            agendar_alarme_inicio(
-                dt_inicio, 
-                message.from_user.id, 
-                resposta_db['item_nome'], 
-                resposta_db['reserva'].id
-            )
-            # ----------------------------------
-            await message.answer(
-                f"✅ <b>Reserva Confirmada!</b>\n\n"
-                f"⚙️ <b>Item:</b> {resposta_db['item_nome']}\n"
-                f"📅 <b>Início:</b> {dt_inicio.strftime('%d/%m/%Y às %H:%M')}\n"
-                f"📅 <b>Término:</b> {dt_fim.strftime('%d/%m/%Y às %H:%M')}",
-                parse_mode="HTML"
-            )
-        else:
-            await message.answer(f"❌ <b>Erro na reserva:</b>\n{resposta_db['erro']}", parse_mode="HTML")
-             
-    # 3. Bate-papo normal
-    elif resultado["tipo"] == "texto":
-        await message.answer(resultado["conteudo"])
-        
-    # 4. Se algo muito bizarro acontecer, avisa
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+    # O loop de function calling resolve a tarefa em múltiplas rodadas:
+    # LLM chama tools → executor executa → resultado volta ao LLM → continua.
+    resultado = await executar_loop_funcoes(
+        texto_usuario=message.text,
+        telegram_id=message.from_user.id,
+        executor=EXECUTOR,
+    )
+
+    if resultado["tipo"] == "texto":
+        await message.answer(resultado["conteudo"], parse_mode="HTML")
     else:
-        await message.answer("Tive um problema ao processar seu pedido.")
+        await message.answer(resultado.get("conteudo", "Tive um problema ao processar seu pedido."))

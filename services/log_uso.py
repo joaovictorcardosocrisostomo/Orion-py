@@ -38,7 +38,7 @@ def registrar_log_uso(
 
 def buscar_logs_por_usuario(usuario_id: int, dias: int = 1) -> List[LogUso]:
     """Busca logs de uso de um usuário nos últimos N dias."""
-    data_corte = datetime.utcnow() - timedelta(days=dias)
+    data_corte = datetime.now(datetime.timezone.utc) - timedelta(days=dias)
 
     with Session(engine) as session:
         statement = (

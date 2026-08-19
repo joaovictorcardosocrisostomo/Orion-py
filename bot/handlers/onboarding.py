@@ -6,11 +6,12 @@ from aiogram.fsm.state import State, StatesGroup
 
 from services.usuario import salvar_usuario, buscar_usuario
 from database.models import NivelAcesso
+from core.config import settings
 
 router = Router()
 
-# Senha mestre provisória (depois moveremos para o .env)
-SENHA_ADMIN = "orion2026"
+# Senha mestre (lida do .env — padrão: orion2026)
+SENHA_ADMIN = settings.ADMIN_SECRET
 
 # 1. Definindo as etapas do questionário de Onboarding
 class FluxoRegistro(StatesGroup):
@@ -21,6 +22,8 @@ class FluxoRegistro(StatesGroup):
 # 2. Gatilho Inicial (/start)
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
+    if message.from_user is None:
+        return
     usuario_existente = buscar_usuario(message.from_user.id)
     
     if usuario_existente:
@@ -45,6 +48,8 @@ async def cmd_start(message: Message, state: FSMContext):
 # 3. Capturando o Nome
 @router.message(FluxoRegistro.aguardando_nome)
 async def processar_nome(message: Message, state: FSMContext):
+    if message.text is None:
+        return
     nome_digitado = message.text
     
     # Salva o nome temporariamente na memória da FSM
@@ -66,8 +71,17 @@ async def processar_nome(message: Message, state: FSMContext):
 # 4. Capturando o Clique do Botão
 @router.callback_query(FluxoRegistro.aguardando_nivel)
 async def processar_botao_nivel(callback: CallbackQuery, state: FSMContext):
+    if callback.data is None:
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+
     dados = await state.get_data()
     nome = dados.get("nome")
+    if nome is None:
+        await callback.answer("Nome não encontrado. Rode /start novamente.", show_alert=True)
+        return
     
     if callback.data == "nivel_membro":
         # Salva direto no banco e finaliza
@@ -86,8 +100,12 @@ async def processar_botao_nivel(callback: CallbackQuery, state: FSMContext):
 # 5. Capturando a Senha do Admin
 @router.message(FluxoRegistro.aguardando_senha)
 async def processar_senha_admin(message: Message, state: FSMContext):
+    if message.from_user is None:
+        return
     dados = await state.get_data()
     nome = dados.get("nome")
+    if nome is None:
+        nome = "Usuário"
     
     if message.text == SENHA_ADMIN:
         salvar_usuario(message.from_user.id, nome, NivelAcesso.ADMIN)
