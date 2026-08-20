@@ -9,7 +9,7 @@
 | **Banco Relacional** | PostgreSQL 16 + pgvector | Dados estruturados (itens, reservas, logs) + vetores (RAG) |
 | **Cache/Estado** | Redis (alpine) | FSM storage (estados sobrevivem a restart) + memória LLM |
 | **Agendador** | APScheduler | Cron jobs: auditoria 17h, alarmes de início/fim |
-| **LLM** | Groq API (llama-3.3-70b-versatile) via AsyncOpenAI | NLP e function calling |
+| **LLM** | Groq API (openai/gpt-oss-120b) via AsyncOpenAI | NLP e function calling |
 | **ORM** | SQLModel (Pydantic + SQLAlchemy) | Validação + banco relacional |
 | **Container** | Docker Compose | Infraestrutura (PostgreSQL + Redis) |
 
@@ -71,10 +71,11 @@ O FastAPI **não é usado como API REST** — é o "motor a diesel" que mantém 
 
 **Problema:** O NLP precisa interpretar linguagem natural ("precisa de ácido sulfúrico?") e converter em ações do sistema.
 
-**Solução:** API compatível com OpenAI usando `llama-3.3-70b-versatile` da Groq:
+**Solução:** API compatível com OpenAI usando `openai/gpt-oss-120b` da Groq (substituiu o `llama-3.3-70b-versatile`, descontinuado pela Groq em 16/08/2026):
 - Function calling para buscar itens, registrar agendamentos, etc.
 - Mais barato e rápido que OpenAI para este modelo
 - `AsyncOpenAI(api_key=..., base_url="https://api.groq.com/openai/v1")`
+- Modelo centralizado na constante `MODELO_GROQ` em `services/llm.py`
 
 ### SQLModel / SQLAlchemy
 

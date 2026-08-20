@@ -26,6 +26,15 @@ def init_db():
         
     SQLModel.metadata.create_all(engine)
 
+    # Migração leve: adiciona a coluna grupo_id na tabela reserva caso ainda não exista
+    # (necessária para agrupar os recursos de um mesmo experimento em um único agendamento)
+    with Session(engine) as session:
+        try:
+            session.execute(text("ALTER TABLE reserva ADD COLUMN IF NOT EXISTS grupo_id UUID"))
+            session.commit()
+        except Exception:
+            pass
+
 def get_session():
     """
     Função geradora de sessão. Será injetada nas rotas do FastAPI

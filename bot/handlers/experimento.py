@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from database.db import engine
 from database.models import Reserva, StatusReserva, StatusItem, Item, Usuario
-from services.agendamento import cancelar_reserva, criar_reserva
+from services.agendamento import cancelar_reserva, criar_reserva, criar_reservas_em_grupo
 from services.estoque import listar_itens # Altere para service_estoque se for o seu nome de arquivo
 from services.rag import formatar_contexto_rag
 from services.llm import sintetizar_com_rag
@@ -30,6 +30,58 @@ class FSMExperimento(StatesGroup):
     aguardando_duracao = State()       # 2. Duração em horas
     aguardando_inicio = State()        # 3. Quando começa ("agora" ou data/hora)
     aguardando_mais_recurso = State()  # 4. Loop: adicionar outro recurso?
+
+def _alvos_do_callback(reserva_id_str: str) -> list[dict]:
+    """Resolve um id de callback (avulso OU grupo de experimento) para a lista de reservas alvo.
+
+    Retorna dicts com: reserva_id, item_id, nome_item, data_fim.
+    """
+    resultado: list[dict] = []
+    try:
+        alvo_id = uuid.UUID(reserva_id_str)
+    except ValueError:
+        return resultado
+
+    with Session(engine) as session:
+        reserva = session.get(Reserva, alvo_id)
+        if reserva:
+            # É o id de UMA reserva: se ela pertence a um grupo, pega o grupo inteiro
+            if reserva.grupo_id is not None:
+                alvos = session.exec(select(Reserva).where(Reserva.grupo_id == reserva.grupo_id)).all()
+            else:
+                alvos = [reserva]
+        else:
+            # Não é id de reserva: tenta interpretar como grupo_id de experimento
+            alvos = session.exec(select(Reserva).where(Reserva.grupo_id == alvo_id)).all()
+
+        for r in alvos:
+            item = session.get(Item, r.item_id)
+            resultado.append({
+                "reserva_id": r.id,
+                "item_id": r.item_id,
+                "nome_item": item.nome if item else "Equipamento",
+                "data_fim": r.data_fim,
+            })
+    return resultado
+
+
+def _resolver_uma_reserva_do_alvo(reserva_id_str: str):
+    """Dado um id (avulso) ou grupo_id, devolve o id de UMA reserva do alvo.
+
+    Usado pelo botão cancelar, que delega o cancelamento do grupo inteiro ao service.
+    """
+    try:
+        alvo_id = uuid.UUID(reserva_id_str)
+    except ValueError:
+        return None
+
+    with Session(engine) as session:
+        reserva = session.get(Reserva, alvo_id)
+        if reserva:
+            return reserva.id
+        grupo = session.exec(select(Reserva).where(Reserva.grupo_id == alvo_id)).first()
+        return grupo.id if grupo else None
+
 
 @router.message(Command("hoje"))
 async def painel_do_dia(message: Message):
@@ -62,15 +114,51 @@ async def painel_do_dia(message: Message):
     else:
         await message.answer("📋 <b>Seus agendamentos para hoje:</b>", parse_mode="HTML")
 
-        # Cria uma mensagem com botões para cada agendamento
+        # Agrupa as reservas do MESMO experimento (mesmo grupo_id) em um ÚNICO card
+        grupos: dict[str, list] = {}
+        avulsas: list = []
         for reserva, item in resultados:
+            if reserva.grupo_id is not None:
+                grupos.setdefault(str(reserva.grupo_id), []).append((reserva, item))
+            else:
+                avulsas.append((reserva, item))
+
+        # 1. Cards dos experimentos agrupados (1 card por experimento)
+        for gid, membros in grupos.items():
+            reserva_ref, _ = membros[0]
+            nomes_itens = ", ".join(it.nome for _, it in membros)
+            horario_str = f"{reserva_ref.data_inicio.strftime('%H:%M')} às {reserva_ref.data_fim.strftime('%H:%M')}"
+
+            if reserva_ref.status == StatusReserva.AGENDADO:
+                texto_status = "⏳ <i>Aguardando início</i>"
+                teclado = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="▶️ Iniciar Experimento", callback_data=f"iniciar_{gid}")],
+                    [InlineKeyboardButton(text="❌ Cancelar", callback_data=f"cancelar_{gid}")]
+                ])
+            else:
+                texto_status = "🧪 <b>EM ANDAMENTO</b>"
+                teclado = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Cancelar / Interromper", callback_data=f"cancelar_{gid}")]
+                ])
+
+            await message.answer(
+                f"🧪 <b>Experimento</b>\n"
+                f"📦 Recursos: {nomes_itens}\n"
+                f"🕒 {horario_str}\n"
+                f"Status: {texto_status}",
+                reply_markup=teclado,
+                parse_mode="HTML"
+            )
+
+        # 2. Reservas avulsas (uso relâmpago / NLP)
+        for reserva, item in avulsas:
             horario_str = f"{reserva.data_inicio.strftime('%H:%M')} às {reserva.data_fim.strftime('%H:%M')}"
 
             if reserva.status == StatusReserva.AGENDADO:
                 texto_status = "⏳ <i>Aguardando início</i>"
                 teclado = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="▶️ Iniciar Experimento", callback_data=f"iniciar_{reserva.id}")],
-                    [InlineKeyboardButton(text="❌ Cancelar", callback_data=f"cancelar_{reserva.id}")] # NOVO BOTÃO
+                    [InlineKeyboardButton(text="❌ Cancelar", callback_data=f"cancelar_{reserva.id}")]
                 ])
             else:
                 texto_status = "🧪 <b>EM ANDAMENTO</b>"
@@ -78,13 +166,13 @@ async def painel_do_dia(message: Message):
                     [InlineKeyboardButton(text="❌ Cancelar / Interromper", callback_data=f"cancelar_{reserva.id}")]
                 ])
 
-            msg_texto = (
+            await message.answer(
                 f"⚙️ <b>{item.nome}</b>\n"
                 f"🕒 {horario_str}\n"
-                f"Status: {texto_status}"
+                f"Status: {texto_status}",
+                reply_markup=teclado,
+                parse_mode="HTML"
             )
-
-            await message.answer(msg_texto, reply_markup=teclado, parse_mode="HTML")
             
     # BOTÃO FIXO DE AGENDAMENTO RELÂMPAGO
     teclado_relampago = InlineKeyboardMarkup(inline_keyboard=[
@@ -102,38 +190,53 @@ async def botao_iniciar(callback: CallbackQuery):
         return
 
     reserva_id_str = callback.data.replace("iniciar_", "")
-    
-    with Session(engine) as session:
-        reserva = session.get(Reserva, uuid.UUID(reserva_id_str))
-        
-        if not reserva:
-            await callback.answer("Reserva não encontrada!", show_alert=True)
-            return
-            
-        if reserva.status != StatusReserva.AGENDADO:
-            await callback.answer("Este experimento já foi iniciado ou alterado.", show_alert=True)
-            return
 
-        # MUDA O STATUS PARA EM ANDAMENTO
-        reserva.status = StatusReserva.EM_ANDAMENTO
-        item = session.get(Item, reserva.item_id)
-        nome_item = item.nome if item else "Equipamento"
-        if item:
-            item.estado = StatusItem.EM_USO # Muda o status no banco de dados
+    alvos = _alvos_do_callback(reserva_id_str)
+    if not alvos:
+        await callback.answer("Reserva não encontrada!", show_alert=True)
+        return
+
+    with Session(engine) as session:
+        # Barreira: todas as reservas do alvo precisam estar AGENDADO
+        for alvo in alvos:
+            reserva = session.get(Reserva, alvo["reserva_id"])
+            if reserva is None or reserva.status != StatusReserva.AGENDADO:
+                await callback.answer("Este experimento já foi iniciado ou alterado.", show_alert=True)
+                return
+
+        # MUDA O STATUS PARA EM ANDAMENTO (todas as reservas do experimento juntas)
+        nomes: list[str] = []
+        data_fim_referencia: datetime | None = None
+        for alvo in alvos:
+            reserva = session.get(Reserva, alvo["reserva_id"])
+            if reserva is None:
+                continue
+            reserva.status = StatusReserva.EM_ANDAMENTO
+            item = session.get(Item, reserva.item_id)
+            if item:
+                item.estado = StatusItem.EM_USO  # Muda o status no banco de dados
+                nomes.append(item.nome)
+            data_fim_referencia = reserva.data_fim
         session.commit()
-        
-        # --- LIGANDO O ALARME DE FIM ---
-        agendar_alarme_fim(reserva.data_fim, callback.from_user.id, nome_item, str(reserva.id))
-        # -------------------------------
-        
-        # AQUI É ONDE O DESPERTADOR (SCHEDULER) VAI ENTRAR NO PRÓXIMO PASSO!
-        
-        await callback.message.edit_text(
-            f"▶️ <b>Experimento Iniciado!</b>\n"
-            f"Equipamento: {nome_item}\n\n"
-            f"<i>Bom trabalho na bancada! O Orion irá te notificar às {reserva.data_fim.strftime('%H:%M')} para checar como foi.</i>",
-            parse_mode="HTML"
-        )
+
+    if not nomes or data_fim_referencia is None:
+        await callback.answer("Não foi possível iniciar o experimento.", show_alert=True)
+        return
+
+    # --- LIGANDO O ALARME DE FIM (um único para o experimento inteiro) ---
+    agendar_alarme_fim(
+        data_fim_referencia,
+        callback.from_user.id,
+        ", ".join(nomes),
+        reserva_id_str,  # pode ser grupo_id: o alarme cobre o grupo todo
+    )
+
+    await callback.message.edit_text(
+        f"▶️ <b>Experimento Iniciado!</b>\n"
+        f"Recursos: {', '.join(nomes)}\n\n"
+        f"<i>Bom trabalho na bancada! O Orion irá te notificar às {data_fim_referencia.strftime('%H:%M')} para checar como foi.</i>",
+        parse_mode="HTML"
+    )
 
 @router.callback_query(F.data.startswith("cancelar_"))
 async def botao_cancelar(callback: CallbackQuery):
@@ -144,9 +247,16 @@ async def botao_cancelar(callback: CallbackQuery):
         return
 
     reserva_id_str = callback.data.replace("cancelar_", "")
-    
+
+    # Se vier um grupo_id (experimento), resolve para uma reserva REAL do grupo:
+    # o service cancelar_reserva cuida de cancelar o grupo inteiro via grupo_id
+    reserva_alvo = _resolver_uma_reserva_do_alvo(reserva_id_str)
+    if reserva_alvo is None:
+        await callback.answer("Reserva não encontrada!", show_alert=True)
+        return
+
     # Chama o nosso serviço seguro
-    resultado = cancelar_reserva(uuid.UUID(reserva_id_str), callback.from_user.id)
+    resultado = cancelar_reserva(reserva_alvo, callback.from_user.id)
     
     if not resultado["sucesso"]:
         await callback.answer(resultado["erro"], show_alert=True)
@@ -282,28 +392,41 @@ async def botao_finalizar(callback: CallbackQuery, state: FSMContext):
         return
 
     reserva_id_str = callback.data.replace("finalizar_", "")
-    
+
+    alvos = _alvos_do_callback(reserva_id_str)
+    if not alvos:
+        await callback.answer("Reserva não encontrada!", show_alert=True)
+        return
+
     with Session(engine) as session:
-        reserva = session.get(Reserva, uuid.UUID(reserva_id_str))
-        if reserva is None:
-            await callback.answer("Reserva não encontrada!", show_alert=True)
-            return
-        reserva.status = StatusReserva.CONCLUIDO
-        item = session.get(Item, reserva.item_id)
-        if item is None:
-            await callback.answer("Item não encontrado!", show_alert=True)
-            return
+        for alvo in alvos:
+            reserva = session.get(Reserva, alvo["reserva_id"])
+            if reserva is None:
+                continue
+            reserva.status = StatusReserva.CONCLUIDO
         session.commit()
-        
-        await state.update_data(item_id=str(item.id), nome_item=item.nome)
-        
+
+    # Fluxo de relatório: começa pelo primeiro recurso e mantém os demais na fila
+    primeiro = alvos[0]
+    await state.update_data(
+        item_id=str(primeiro["item_id"]),
+        nome_item=primeiro["nome_item"],
+        grupo_itens_pendentes=[
+            {"item_id": str(a["item_id"]), "nome_item": a["nome_item"]} for a in alvos[1:]
+        ],
+    )
+
     teclado = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Tudo perfeito", callback_data="estado_bom")],
         [InlineKeyboardButton(text="⚠️ Apresentou avaria/quebrou", callback_data="estado_avaria")]
     ])
-    
-    await callback.message.edit_text(f"✅ <b>Experimento Concluído!</b>\nComo você deixou o <b>{item.nome}</b> após o uso?", reply_markup=teclado, parse_mode="HTML")
-    
+
+    texto_final = f"✅ <b>Experimento Concluído!</b>\nComo você deixou o <b>{primeiro['nome_item']}</b> após o uso?"
+    if len(alvos) > 1:
+        texto_final += f"\n<i>({len(alvos) - 1} outro(s) recurso(s) aguardando confirmação)</i>"
+
+    await callback.message.edit_text(texto_final, reply_markup=teclado, parse_mode="HTML")
+
     # Engatilha o usuário no relatório de avarias!
     await state.set_state(FSMRelatorio.aguardando_estado_avaria)
 
@@ -316,28 +439,37 @@ async def botao_estender(callback: CallbackQuery):
         return
 
     reserva_id_str = callback.data.replace("estender_", "")
-    
+
+    alvos = _alvos_do_callback(reserva_id_str)
+    if not alvos:
+        await callback.answer("Reserva não encontrada!", show_alert=True)
+        return
+
     try:
+        nomes: list[str] = []
+        nova_data: datetime | None = None
         with Session(engine) as session:
-            reserva = session.get(Reserva, uuid.UUID(reserva_id_str))
-            if reserva is None:
-                await callback.answer("Reserva não encontrada!", show_alert=True)
-                return
-            
-            # Dá mais 30 minutos na data final da reserva
-            reserva.data_fim = reserva.data_fim + timedelta(minutes=30)
-            nova_data = reserva.data_fim
-            
-            item = session.get(Item, reserva.item_id)
-            nome_do_item = item.nome if item else "Equipamento"
-            
+            for alvo in alvos:
+                reserva = session.get(Reserva, alvo["reserva_id"])
+                if reserva is None:
+                    continue
+                # Dá mais 30 minutos na data final de TODOS os recursos do experimento
+                reserva.data_fim = reserva.data_fim + timedelta(minutes=30)
+                nova_data = reserva.data_fim
+                item = session.get(Item, reserva.item_id)
+                if item:
+                    nomes.append(item.nome)
             session.commit()
-            
+
+        if nova_data is None:
+            await callback.answer("Nenhuma reserva encontrada para estender.", show_alert=True)
+            return
+
         # 🛡️ CORREÇÃO DEFINITIVA: Usamos a variável de texto reserva_id_str que já tínhamos!
-        agendar_alarme_fim(nova_data, callback.from_user.id, nome_do_item, reserva_id_str)
-        
+        agendar_alarme_fim(nova_data, callback.from_user.id, ", ".join(nomes), reserva_id_str)
+
         await callback.message.edit_text(
-            f"⏳ <b>Tempo Estendido!</b>\nO Orion retornará às {nova_data.strftime('%H:%M')} para checar novamente.", 
+            f"⏳ <b>Tempo Estendido!</b>\nO Orion retornará às {nova_data.strftime('%H:%M')} para checar novamente.",
             parse_mode="HTML"
         )
     except Exception as e:
@@ -564,10 +696,10 @@ async def experimento_duracao(callback: CallbackQuery, state: FSMContext):
     duration = int(horas)
     await state.update_data(duracao=float(duration))
     if isinstance(callback.message, Message):
-        await _perguntar_inicio(callback.message, state)
+        await _perguntar_mais_recurso(callback.message, state)
     else:
         await callback.answer("Clique novamente no horário de início.", show_alert=True)
-        await state.set_state(FSMExperimento.aguardando_inicio)
+        await state.set_state(FSMExperimento.aguardando_mais_recurso)
 
 
 @router.message(FSMExperimento.aguardando_duracao)
@@ -590,8 +722,90 @@ async def experimento_duracao_custom(message: Message, state: FSMContext):
         return
 
     await state.update_data(duracao=float(duration), duracao_personalizada=False)
-    await _perguntar_inicio(message, state)
+    await _perguntar_mais_recurso(message, state)
 
+
+async def _perguntar_mais_recurso(target: Message, state: FSMContext):
+    """Helper: pergunta se o usuário quer adicionar mais recursos (vidraria, reagente, material)."""
+    dados = await state.get_data()
+    recursos = dados.get("recursos", [])
+    nomes = ", ".join(r["nome"] for r in recursos)
+
+    teclado = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Adicionar material", callback_data="exp_recurso_sim")],
+        [InlineKeyboardButton(text="⏭️ Não, seguir", callback_data="exp_recurso_nao")],
+    ])
+    await target.answer(
+        f"🧪 <b>Seu plano até agora:</b>\n"
+        f"  ⚙️ Recursos: {nomes}\n\n"
+        f"Vai usar alguma <b>vidraria</b>, <b>reagente</b> ou <b>material de apoio</b>?\n"
+        f"<i>(Ex: balão 60mL, 1-10 Fenantrolina, álcool 70%)</i>",
+        reply_markup=teclado,
+        parse_mode="HTML"
+    )
+    await state.set_state(FSMExperimento.aguardando_mais_recurso)
+
+@router.callback_query(F.data == "exp_recurso_sim")
+async def experimento_recurso_sim(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🔎 Digite o nome da <b>vidraria</b>, <b>reagente</b> ou <b>material</b> que você vai usar:\n\n"
+        "<i>(Ex: balão 60mL, 1-10 Fenantrolina, álcool 70%)</i>",
+        parse_mode="HTML"
+    )
+    await state.set_state(FSMExperimento.aguardando_mais_recurso)
+
+@router.callback_query(F.data == "exp_recurso_nao")
+async def experimento_recurso_nao(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+    await callback.message.edit_text("👍 <b>Perfeito!</b> Recursos finalizados.")
+    await _perguntar_inicio(callback.message, state)
+
+@router.message(FSMExperimento.aguardando_mais_recurso)
+async def experimento_mais_recurso(message: Message, state: FSMContext):
+    if message.text is None:
+        return
+    termo = message.text.strip()
+    if not termo:
+        await message.answer("Digite o nome do material/equipamento:")
+        return
+
+    resultados = listar_itens(termo_busca=termo)
+    if not resultados:
+        await message.answer(
+            f"⚠️ <b>'{termo}' não encontrado no estoque.</b>\n"
+            "Pode digitar o nome correto, ou toque em <b>⏭️ Não, seguir</b>.",
+            parse_mode="HTML"
+        )
+        return
+
+    item, lab = resultados[0]
+    sigla_lab = lab.sigla if lab else "N/A"
+
+    dados = await state.get_data()
+    recursos = dados.get("recursos", [])
+    if not any(r["id"] == str(item.id) for r in recursos):
+        recursos.append({
+            "id": str(item.id),
+            "nome": item.nome,
+            "lab": sigla_lab,
+        })
+    await state.update_data(recursos=recursos)
+
+    # Pergunta se quer adicionar mais
+    teclado = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Adicionar outro", callback_data="exp_recurso_sim")],
+        [InlineKeyboardButton(text="⏭️ Não, seguir", callback_data="exp_recurso_nao")],
+    ])
+    await message.answer(
+        f"✅ <b>{item.nome}</b> adicionado ao plano ({sigla_lab}).\n\n",
+        reply_markup=teclado,
+        parse_mode="HTML"
+    )
 
 async def _perguntar_inicio(target: Message, state: FSMContext):
     """Helper: envia a pergunta de horário de início."""
@@ -672,7 +886,7 @@ async def experimento_inicio_texto(message: Message, state: FSMContext):
 
 
 async def _agendar_recursos(target: Message, telegram_id: int, state: FSMContext, dt_inicio: datetime):
-    """Executa as reservas de TODOS os recursos do plano."""
+    """Executa as reservas de TODOS os recursos do plano sob um MESMO grupo_id."""
     dados = await state.get_data()
     duracao = dados.get("duracao", 1.0)
     recursos = dados.get("recursos", [])
@@ -680,26 +894,27 @@ async def _agendar_recursos(target: Message, telegram_id: int, state: FSMContext
 
     dt_fim = dt_inicio + timedelta(hours=duracao)
 
-    # Reserva cada recurso
-    sucessos = []
-    falhas = []
-    for recurso in recursos:
-        resposta = criar_reserva(
-            telegram_id=telegram_id,
-            item_id=uuid.UUID(recurso["id"]),
-            data_inicio=dt_inicio,
-            data_fim=dt_fim,
-        )
-        if resposta["sucesso"]:
-            agendar_alarme_inicio(
-                dt_inicio,
-                telegram_id,
-                resposta["item_nome"],
-                str(resposta["reserva"].id),
-            )
-            sucessos.append(resposta["item_nome"])
-        else:
-            falhas.append(f"{recurso['nome']}: {resposta['erro']}")
+    if not recursos:
+        await target.answer("⚠️ Nenhum recurso foi adicionado ao plano. Refaça o /experimento.")
+        await state.clear()
+        return
+
+    # Cria TODAS as reservas do experimento em um único agendamento lógico (grupo_id comum)
+    resultado = criar_reservas_em_grupo(
+        telegram_id=telegram_id,
+        itens=[uuid.UUID(r["id"]) for r in recursos],
+        data_inicio=dt_inicio,
+        data_fim=dt_fim,
+    )
+
+    sucessos = resultado["sucessos"]
+    falhas = resultado["falhas"]
+
+    # Um único alarme de início para o experimento inteiro (usa o grupo_id nos botões)
+    if resultado["sucesso"]:
+        grupo_id_str = str(resultado["grupo_id"])
+        agendar_alarme_inicio(dt_inicio, telegram_id, ", ".join(sucessos), grupo_id_str)
+        agendar_alarme_fim(dt_fim, telegram_id, ", ".join(sucessos), grupo_id_str)
 
     # Monta resumo
     msg = "✅ <b>Experimento Planejado!</b>\n\n"
@@ -709,7 +924,7 @@ async def _agendar_recursos(target: Message, telegram_id: int, state: FSMContext
     msg += f"⏰ <b>Término previsto:</b> {dt_fim.strftime('%d/%m/%Y às %H:%M')}\n\n"
 
     if sucessos:
-        msg += "✅ <b>Reservados:</b>\n" + "\n".join(f"  • {n}" for n in sucessos) + "\n"
+        msg += "✅ <b>Reservados (1 agendamento):</b>\n" + "\n".join(f"  • {n}" for n in sucessos) + "\n"
     if falhas:
         msg += "\n⚠️ <b>Conflitos:</b>\n" + "\n".join(f"  • {f}" for f in falhas) + "\n\n"
         msg += "<i>Alinhe os conflitos e refaça o agendamento se necessário.</i>"

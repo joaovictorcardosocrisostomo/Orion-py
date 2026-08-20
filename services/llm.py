@@ -15,6 +15,11 @@ client = AsyncOpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
+# 🧠 MODELO UTILIZADO NA GROQ
+# llama-3.3-70b-versatile foi DESCONTINUADO em 16/08/2026.
+# Substituído por openai/gpt-oss-120b (recomendação oficial da Groq).
+MODELO_GROQ = "openai/gpt-oss-120b"
+
 # 🧠 MEMÓRIA DE CURTO PRAZO: Dicionário para guardar as conversas de cada usuário
 memoria_conversas = {}
 
@@ -232,7 +237,7 @@ REGRAS DE FERRAMENTAS:
 
     try:
         response = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=MODELO_GROQ,
             messages=mensagens_para_ia,
             tools=TOOLS,
             tool_choice="auto",
@@ -311,7 +316,7 @@ CONTEXTO DOS DOCUMENTOS ENCONTRADOS:
 
     try:
         response = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=MODELO_GROQ,
             messages=mensagens,
             temperature=0.3,  # Sem tools — evita loop de chamadas
         )
@@ -458,7 +463,7 @@ async def executar_loop_funcoes(
     try:
         for _ in range(max_iteracoes):
             response = await client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=MODELO_GROQ,
                 messages=mensagens,
                 tools=TOOLS,
                 tool_choice="auto",

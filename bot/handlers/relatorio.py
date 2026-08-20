@@ -6,7 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlmodel import Session
 
 from database.db import engine
-from database.models import Item
+from database.models import Item, StatusItem
 from services.estoque import listar_itens # Lembre-se do nome do seu arquivo aqui (pode ser service_estoque)
 
 router = Router()
@@ -48,6 +48,10 @@ async def buscar_item_relatorio(message: Message, state: FSMContext):
 # ==========================================
 @router.callback_query(FSMRelatorio.aguardando_estado_avaria)
 async def processar_estado(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+
     dados = await state.get_data()
     item_id = dados.get("item_id")
     nome_item = dados.get("nome_item")
@@ -56,16 +60,36 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
         with Session(engine) as session:
             item = session.get(Item, item_id)
             if item:
-                item.estado = "Bom"
+                item.estado = StatusItem.BOM
             session.commit()
-            
+
+        # Se ainda há recursos do MESMO experimento aguardando confirmação, pergunta o próximo
+        pendentes = dados.get("grupo_itens_pendentes", [])
+        if pendentes:
+            proximo = pendentes.pop(0)
+            await state.update_data(
+                item_id=proximo["item_id"],
+                nome_item=proximo["nome_item"],
+                grupo_itens_pendentes=pendentes,
+            )
+
+            teclado = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Tudo perfeito", callback_data="estado_bom")],
+                [InlineKeyboardButton(text="⚠️ Apresentou avaria/quebrou", callback_data="estado_avaria")]
+            ])
+            texto = f"✅ <b>{nome_item}</b> registrado como OK.\n\nE o <b>{proximo['nome_item']}</b>? Como você deixou após o uso?"
+            if pendentes:
+                texto += f"\n<i>({len(pendentes)} outro(s) recurso(s) aguardando confirmação)</i>"
+            await callback.message.edit_text(texto, reply_markup=teclado, parse_mode="HTML")
+            return
+
         await callback.message.edit_text(f"✅ Relatório salvo! Obrigado por cuidar do <b>{nome_item}</b>.", parse_mode="HTML")
         await state.clear()
-        
+
     elif callback.data == "estado_avaria":
         # Em vez de fechar, avança a FSM para perguntar o que aconteceu!
         await callback.message.edit_text(
-            f"⚠️ <b>Avaria no {nome_item}</b>\nPor favor, digite uma breve descrição do que aconteceu ou o que está quebrado:", 
+            f"⚠️ <b>Avaria no {nome_item}</b>\nPor favor, digite uma breve descrição do que aconteceu ou o que está quebrado:",
             parse_mode="HTML"
         )
         await state.set_state(FSMRelatorio.aguardando_detalhes_avaria)
@@ -78,7 +102,7 @@ async def processar_detalhes(message: Message, state: FSMContext):
     with Session(engine) as session:
         item = session.get(Item, dados.get("item_id"))
         if item:
-            item.estado = "Quebrado"
+            item.estado = StatusItem.QUEBRADO
             # Aqui, no futuro, você pode salvar o texto "detalhes" na tabela de LogUso!
         session.commit()
 

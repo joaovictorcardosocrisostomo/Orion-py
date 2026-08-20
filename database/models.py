@@ -92,6 +92,9 @@ class Reserva(SQLModel, table=True):
     data_inicio: datetime
     data_fim: datetime
     status: StatusReserva = Field(default=StatusReserva.AGENDADO)
+
+    # Agrupador de experimento: recursos de um MESMO agendamento compartilham o mesmo grupo_id
+    grupo_id: Optional[uuid.UUID] = Field(default=None)
     
     usuario: Usuario = Relationship(back_populates="reservas")
     item: Item = Relationship(back_populates="reservas")

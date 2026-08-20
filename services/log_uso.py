@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from sqlmodel import Session, select
 
@@ -14,7 +14,7 @@ def registrar_log_uso(
     estado: StatusItem,
     observacoes: Optional[str] = None,
     reposicao_necessaria: bool = False,
-) -> LogUso:
+) -> tuple[LogUso, str]:
     """Cria um registro de LogUso e persiste no banco."""
     with Session(engine) as session:
         log = LogUso(
@@ -38,7 +38,7 @@ def registrar_log_uso(
 
 def buscar_logs_por_usuario(usuario_id: int, dias: int = 1) -> List[LogUso]:
     """Busca logs de uso de um usuário nos últimos N dias."""
-    data_corte = datetime.now(datetime.timezone.utc) - timedelta(days=dias)
+    data_corte = datetime.now(timezone.utc) - timedelta(days=dias)
 
     with Session(engine) as session:
         statement = (

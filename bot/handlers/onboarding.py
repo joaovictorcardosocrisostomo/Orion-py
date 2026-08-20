@@ -27,12 +27,18 @@ async def cmd_start(message: Message, state: FSMContext):
     usuario_existente = buscar_usuario(message.from_user.id)
     
     if usuario_existente:
+        # Botão para manter o perfil atual e sair da edição
+        teclado_cancelar = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Cancelar edição", callback_data="cancelar_edicao")]
+        ])
         await message.answer(
             f"👋 Olá de novo, <b>{usuario_existente.nome}</b>!\n"
             f"Seu perfil atual é: <i>{usuario_existente.nivel_acesso.value}</i>\n\n"
             f"Como você rodou o /start novamente, vamos atualizar seus dados.\n"
-            f"✍️ <b>Qual é o seu nome e sobrenome corretos?</b>",
-            parse_mode="HTML"
+            f"✍️ <b>Qual é o seu nome e sobrenome corretos?</b>\n\n"
+            f"Ou toque em <i>Cancelar edição</i> para manter o perfil atual:",
+            parse_mode="HTML",
+            reply_markup=teclado_cancelar
         )
     else:
         await message.answer(
@@ -44,6 +50,23 @@ async def cmd_start(message: Message, state: FSMContext):
     
     # Coloca o usuário no estado de espera do nome
     await state.set_state(FluxoRegistro.aguardando_nome)
+
+# Handler para cancelar a edição do perfil (segundo /start)
+@router.callback_query(F.data == "cancelar_edicao")
+async def cancelar_edicao_perfil(callback: CallbackQuery, state: FSMContext):
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+
+    usuario_existente = buscar_usuario(callback.from_user.id)
+    await callback.message.edit_text(
+        f"✅ <b>Perfil mantido!</b>\n"
+        f"Não fiz nenhuma alteração.\n\n"
+        f"👤 Nome: <b>{usuario_existente.nome}</b>\n"
+        f"🛡️ Nível: <i>{usuario_existente.nivel_acesso.value}</i>",
+        parse_mode="HTML"
+    )
+    await state.clear()
 
 # 3. Capturando o Nome
 @router.message(FluxoRegistro.aguardando_nome)
