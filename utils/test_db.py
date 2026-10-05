@@ -1,9 +1,15 @@
-from sqlmodel import Session
+from sqlmodel import Session, select
 from database.db import engine
-from database.models import Laboratorio, Usuario, UsuarioLaboratorio, Role
+from database.models import Laboratorio, Usuario, NivelAcesso
 
 def testar_criacao():
     with Session(engine) as session:
+        # 0. Limpeza prévia (Opcional, mas ajuda no teste repetível)
+        existing_user = session.exec(select(Usuario).where(Usuario.telegram_id == 999)).first()
+        if existing_user:
+            session.delete(existing_user)
+            session.commit()
+
         # 1. Laboratório
         lab = Laboratorio(nome="Laboratório de Teste", sigla="LAB-T")
         session.add(lab)
@@ -11,26 +17,19 @@ def testar_criacao():
         session.refresh(lab)
         print(f"✅ Laboratório criado com ID: {lab.id}")
 
-        # 2. Usuário (Passando os campos extras que o banco está cobrando)
+        # 2. Usuário
         user = Usuario(
             telegram_id=999, 
             nome="Administrador Teste",
-            nivel_acesso="admin", # Campo que o banco está exigindo
-            modo_atual="normal"   # Campo que o banco está exigindo
+            nivel_acesso=NivelAcesso.ADMIN,
+            modo_atual="Normal"
         )
         session.add(user)
         session.commit()
         print("✅ Usuário criado.")
 
-        # 3. Vínculo
-        vinculo = UsuarioLaboratorio(
-            usuario_id=user.telegram_id, 
-            laboratorio_id=lab.id, 
-            role=Role.ADMIN
-        )
-        session.add(vinculo)
-        session.commit()
-        print("✅ Vínculo (Admin) criado com sucesso!")
+        # 3. Vínculo ignorado (removido do modelo)
+        print("✅ Vínculo (Admin) ignorado — removido do modelo.")
 
 if __name__ == "__main__":
     try:

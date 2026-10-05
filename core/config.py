@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -27,8 +28,9 @@ class Settings(BaseSettings):
         """Resolve a chave do Gemini: GOOGLE_API_KEY tem prioridade, fallback GEMINI_API_KEY."""
         return self.GOOGLE_API_KEY or self.GEMINI_API_KEY or ""
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore" # Isso diz ao Pydantic para ignorar extras no .env se houver
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore"
+    )
 
 settings = Settings()

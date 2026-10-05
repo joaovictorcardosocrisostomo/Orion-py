@@ -91,3 +91,29 @@ def atualizar_quantidade(item_id: uuid.UUID, quantidade: float) -> bool:
 
         session.commit()
         return True
+
+def editar_item(item_id: uuid.UUID, dados_atualizacao: dict) -> bool:
+    """Atualiza dinamicamente os campos de um item com base nas regras da categoria."""
+    from services.schemas_estoque import get_edit_schema
+    with Session(engine) as session:
+        item = session.get(Item, item_id)
+        if not item:
+            return False
+
+        # Valida os dados usando o schema adequado para a categoria do item
+        schema_class = get_edit_schema(item.categoria)
+        
+        # Filtra e valida via Pydantic
+        try:
+            dados_validados = schema_class(**dados_atualizacao)
+        except Exception:
+            return False
+
+        # Aplica apenas os campos que foram enviados (não None)
+        atualizacoes = dados_validados.model_dump(exclude_unset=True)
+        for chave, valor in atualizacoes.items():
+            setattr(item, chave, valor)
+
+        session.add(item)
+        session.commit()
+        return True
