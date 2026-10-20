@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, List
 from enum import Enum
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, BigInteger, ForeignKey
 from pgvector.sqlalchemy import Vector

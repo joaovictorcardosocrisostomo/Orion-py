@@ -1,3 +1,4 @@
+import uuid
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -7,7 +8,8 @@ from sqlmodel import Session
 
 from database.db import engine
 from database.models import Item, StatusItem
-from services.estoque import listar_itens # Lembre-se do nome do seu arquivo aqui (pode ser service_estoque)
+from services.estoque import listar_itens
+from services.log_uso import registrar_log_uso
 
 router = Router()
 
@@ -53,12 +55,13 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
         return
 
     dados = await state.get_data()
-    item_id = dados.get("item_id")
+    item_id_str = dados.get("item_id")
+    item_uuid = uuid.UUID(item_id_str) if item_id_str else None
     nome_item = dados.get("nome_item")
 
     if callback.data == "estado_bom":
         with Session(engine) as session:
-            item = session.get(Item, item_id)
+            item = session.get(Item, item_uuid)
             if item:
                 item.estado = StatusItem.BOM
             session.commit()
@@ -96,15 +99,26 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
 
 @router.message(FSMRelatorio.aguardando_detalhes_avaria)
 async def processar_detalhes(message: Message, state: FSMContext):
-    detalhes = message.text
+    detalhes = message.text or "Avaria não detalhada"
     dados = await state.get_data()
+    item_id_str = dados.get("item_id")
+    item_uuid = uuid.UUID(item_id_str) if item_id_str else None
     
     with Session(engine) as session:
-        item = session.get(Item, dados.get("item_id"))
+        item = session.get(Item, item_uuid)
         if item:
             item.estado = StatusItem.QUEBRADO
-            # Aqui, no futuro, você pode salvar o texto "detalhes" na tabela de LogUso!
         session.commit()
+
+    if item_uuid and message.from_user is not None:
+        registrar_log_uso(
+            usuario_id=message.from_user.id,
+            item_id=item_uuid,
+            quantidade=0.0,
+            estado=StatusItem.QUEBRADO,
+            observacoes=f"Avaria: {detalhes}",
+            reposicao_necessaria=False,
+        )
 
     await message.answer(
         f"🚨 Relatório de avaria registrado!\n"

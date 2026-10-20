@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from database.db import engine
 from database.models import Reserva, StatusReserva, StatusItem, Item, Usuario
-from services.agendamento import cancelar_reserva, criar_reserva, criar_reservas_em_grupo
+from services.agendamento import cancelar_reserva, criar_reserva, criar_reservas_em_grupo, verificar_conflito
 from services.estoque import listar_itens # Altere para service_estoque se for o seu nome de arquivo
 from services.rag import formatar_contexto_rag
 from services.llm import sintetizar_com_rag
@@ -446,6 +446,24 @@ async def botao_estender(callback: CallbackQuery):
         return
 
     try:
+        # 1. Valida se a extensão de 30 min causa conflito com reservas posteriores de outros usuários
+        conflitos: list[str] = []
+        with Session(engine) as session:
+            for alvo in alvos:
+                reserva = session.get(Reserva, alvo["reserva_id"])
+                if reserva is None:
+                    continue
+                nova_data_fim = reserva.data_fim + timedelta(minutes=30)
+                if verificar_conflito(reserva.item_id, reserva.data_fim, nova_data_fim, ignorar_reserva_id=reserva.id):
+                    conflitos.append(alvo["nome_item"])
+
+        if conflitos:
+            await callback.answer(
+                f"⚠️ Não é possível estender: há outra reserva para {', '.join(conflitos)} logo em seguida!",
+                show_alert=True
+            )
+            return
+
         nomes: list[str] = []
         nova_data: datetime | None = None
         with Session(engine) as session:
@@ -911,10 +929,10 @@ async def _agendar_recursos(target: Message, telegram_id: int, state: FSMContext
     falhas = resultado["falhas"]
 
     # Um único alarme de início para o experimento inteiro (usa o grupo_id nos botões)
+    # O alarme de fim será armado quando o usuário de fato clicar em "▶️ Iniciar Experimento"
     if resultado["sucesso"]:
         grupo_id_str = str(resultado["grupo_id"])
         agendar_alarme_inicio(dt_inicio, telegram_id, ", ".join(sucessos), grupo_id_str)
-        agendar_alarme_fim(dt_fim, telegram_id, ", ".join(sucessos), grupo_id_str)
 
     # Monta resumo
     msg = "✅ <b>Experimento Planejado!</b>\n\n"

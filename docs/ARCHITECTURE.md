@@ -134,6 +134,12 @@ Orion-py/
 ├── requirements.txt         # Dependências Python
 ├── planejamento.md           # Roadmap do projeto
 │
+├── api/
+│   └── dashboard.py         # Endpoints REST e controller do Painel Web
+│
+├── templates/
+│   └── dashboard.html       # Single Page Application (LIMS Dashboard)
+│
 ├── core/
 │   └── config.py            # Configurações (variáveis de ambiente)
 │
@@ -143,11 +149,13 @@ Orion-py/
 │
 ├── bot/
 │   ├── handlers/
-│   │   ├── onboarding.py    # /start — cadastro do usuário
+│   │   ├── onboarding.py    # /start — cadastro do usuário e /cancelar
+│   │   ├── dashboard.py     # /dashboard e /painel — MiniApp e Web
 │   │   ├── handler_estoque.py # Consulta de estoque
-│   │   ├── experimento.py   # /hoje — experimento relâmpago
-│   │   ├── relatorio.py     # /relatorio — reportar condição
+│   │   ├── experimento.py   # /hoje e /experimento — planejamento
+│   │   ├── relatorio.py     # /relatorio — reportar condição/avaria
 │   │   ├── auditoria.py     # Auditoria diária (17h) — FSM completa
+│   │   ├── adicionar_pop.py # /adicionar_pop — ingestão RAG
 │   │   └── nlp.py           # Rota de linguagem natural (LLM)
 │   ├── keyboards.py         # Teclados reutilizáveis
 │   └── states.py            # StatesGroups compartilhados
@@ -158,12 +166,14 @@ Orion-py/
 │   ├── log_uso.py           # Registro de logs de auditoria
 │   ├── usuario.py           # CRUD de usuários
 │   ├── agendamento.py       # Reservas (criar, cancelar, conflitos)
-│   ├── llm.py               # Groq + function calling
-│   └── rag.py               # (Sprint 5) Busca semântica
+│   ├── llm.py               # Groq + loop de function calling
+│   ├── rag.py               # Busca semântica (Gemini Embedding + pgvector)
+│   ├── protocolo.py         # CRUD de Protocolos Experimentais
+│   └── parser_documento.py  # Extração de texto de PDF/DOCX/MD/TXT
 │
 └── utils/
     ├── importar_excel.py    # Migração da planilha → banco
-    ├── importar_csv.py      # (Legado) CSV → banco
+    ├── importar_pops.py     # Carga em lote de POPs para o RAG
     └── test_db.py           # Script de teste do banco
 ```
 

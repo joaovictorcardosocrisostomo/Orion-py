@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Segurança
     ADMIN_SECRET: str = "orion2026"
     
+    # Dashboard Web / Telegram MiniApp
+    DASHBOARD_URL: str = "http://localhost:8000/dashboard"
+    
     # Webhooks pro futuro
     # WEBHOOK_URL: str = "http://localhost:8000"
     # WEBHOOK_PATH: str = "/webhook"

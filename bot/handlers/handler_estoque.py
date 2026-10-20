@@ -131,3 +131,102 @@ async def processar_novo_valor(message: Message, state: FSMContext):
 async def callback_cancelar_edicao(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text("❌ Edição cancelada.")
+
+
+@router.message(Command("adicionar_item"))
+async def cmd_adicionar_item(message: Message):
+    """
+    Cadastra um novo item diretamente via comando no Telegram.
+    Formato rápido usando barras verticais (|):
+    /adicionar_item Nome | Categoria | Quantidade | Unidade | Lab | Bancada | Complemento | Marca | Lote
+    
+    Exemplo:
+    /adicionar_item Cloreto de Sódio P.A. | reagente | 500 | g | LAT | Bancada 02 | do lado da pia | Synth | L-2024
+    """
+    import re
+    from services.estoque import cadastrar_novo_item
+
+    texto = message.text or ""
+    partes_cmd = texto.split(maxsplit=1)
+
+    if len(partes_cmd) < 2 or not partes_cmd[1].strip() or partes_cmd[1].strip().lower() in ("ajuda", "help"):
+        await message.answer(
+            "➕ <b>Como adicionar um novo item via Telegram:</b>\n\n"
+            "Envie o comando separando os campos com barra vertical (<code>|</code>):\n"
+            "<code>/adicionar_item Nome | Categoria | Quantidade | Unidade | Lab | Bancada | Complemento | Marca | Lote</code>\n\n"
+            "🧪 <b>Exemplo prático:</b>\n"
+            "<code>/adicionar_item Cloreto de Sódio | reagente | 500 | g | LAT | Bancada 02 | do lado da pia | Synth | L-2024</code>\n\n"
+            "<i>Categorias aceitas:</i> <code>reagente</code>, <code>equipamento</code>, <code>vidraria</code>, <code>limpeza</code>.\n\n"
+            "💡 <i>Você também pode simplesmente pedir em linguagem natural no chat:\n"
+            "\"Cadastra 500g de sulfato de cobre no LAT bancada 1 do lado da pia marca Synth lote 9982\"</i>",
+            parse_mode="HTML"
+        )
+        return
+
+    conteudo = partes_cmd[1].strip()
+    campos = [c.strip() for c in conteudo.split("|")]
+
+    nome = campos[0] if len(campos) > 0 else ""
+    if not nome:
+        await message.answer("❌ O nome do item é obrigatório.")
+        return
+
+    categoria = campos[1] if len(campos) > 1 and campos[1] else "reagente"
+    qtd_raw = campos[2] if len(campos) > 2 and campos[2] else "1"
+    unidade = campos[3] if len(campos) > 3 and campos[3] else "un"
+    lab = campos[4] if len(campos) > 4 and campos[4] else "LAT"
+    bancada = campos[5] if len(campos) > 5 and campos[5] else None
+    complemento = campos[6] if len(campos) > 6 and campos[6] else None
+    marca = campos[7] if len(campos) > 7 and campos[7] else None
+    lote = campos[8] if len(campos) > 8 and campos[8] else None
+
+    # Tenta extrair unidade se estiver grudada no número (ex: 500g -> 500 e g)
+    match_num = re.match(r"^([\d\.,]+)\s*([a-zA-Zµu]+)?$", qtd_raw)
+    if match_num:
+        qtd_str = match_num.group(1).replace(",", ".")
+        unidade_extraida = match_num.group(2)
+        if unidade_extraida and (unidade == "un" or len(campos) <= 3):
+            unidade = unidade_extraida
+    else:
+        qtd_str = qtd_raw.replace(",", ".")
+
+    try:
+        qtd_num = float(qtd_str)
+    except ValueError:
+        await message.answer(f"❌ Quantidade inválida: '{qtd_raw}'. Envie um número válido.")
+        return
+
+    try:
+        item = cadastrar_novo_item(
+            nome=nome,
+            categoria=categoria,
+            quantidade_inicial=qtd_num,
+            unidade_medida=unidade,
+            laboratorio_sigla=lab,
+            bancada=bancada,
+            complemento=complemento,
+            marca=marca,
+            lote=lote,
+            estado="Bom",
+        )
+
+        local_formatado = item.localizacao_exata if item.localizacao_exata else "Não especificada"
+        lab_sigla = lab.upper() if lab else "LAT"
+
+        resposta = (
+            f"✅ <b>Item cadastrado com sucesso!</b>\n\n"
+            f"📦 <b>Nome:</b> {item.nome}\n"
+            f"🏷️ <b>Categoria:</b> {item.categoria.value if hasattr(item.categoria, 'value') else item.categoria}\n"
+            f"⚖️ <b>Quantidade:</b> {item.quantidade_atual} {item.unidade_medida}\n"
+            f"🏢 <b>Laboratório:</b> {lab_sigla}\n"
+            f"📍 <b>Localização:</b> {local_formatado}\n"
+        )
+        if item.marca:
+            resposta += f"🏭 <b>Marca:</b> {item.marca}\n"
+        if item.lote:
+            resposta += f"🔢 <b>Lote:</b> {item.lote}\n"
+
+        await message.answer(resposta, parse_mode="HTML")
+    except Exception as e:
+        await message.answer(f"❌ Erro ao cadastrar item: {str(e)}")
+

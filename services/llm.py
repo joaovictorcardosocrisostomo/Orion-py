@@ -1,8 +1,9 @@
 import json
+import asyncio
 from datetime import datetime
 from typing import cast
 import pytz
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionToolParam,
@@ -34,6 +35,7 @@ ACOES_MUTAVEIS = {
     "registrar_descarte",
     "registrar_reposicao",
     "criar_protocolo_experimental",
+    "cadastrar_item",
 }
 
 def _texto_negativo(texto: str) -> bool:
@@ -124,6 +126,18 @@ TOOLS: list[ChatCompletionToolParam] = [
             }
         }
     },
+    # FERRAMENTA DE LISTAGEM DE PROCEDIMENTOS / POPS
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_procedimentos",
+            "description": "Lista todos os POPs (Procedimentos Operacionais Padrão), protocolos e documentos indexados que REALMENTE existem no banco de conhecimento do laboratório. Use SEMPRE que o usuário perguntar quais POPs temos, quais procedimentos estão disponíveis ou pedir uma lista do acervo.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            }
+        }
+    },
     # FERRAMENTA DE CONSUMO — Dá baixa em estoque
     {
         "type": "function",
@@ -192,6 +206,31 @@ TOOLS: list[ChatCompletionToolParam] = [
                 "required": ["titulo", "etapas", "recursos"]
             }
         }
+    },
+    # FERRAMENTA DE CADASTRO DE NOVO ITEM
+    {
+        "type": "function",
+        "function": {
+            "name": "cadastrar_item",
+            "description": "Cadastra um novo reagente, equipamento, vidraria ou produto de limpeza no inventário. Use sempre que o usuário pedir para cadastrar, adicionar, incluir ou dar entrada em um novo item/reagente no estoque.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nome": {"type": "string", "description": "Nome completo do item ou reagente. Ex: Cloreto de Sódio P.A., Micropipeta 100-1000uL"},
+                    "categoria": {"type": "string", "enum": ["reagente", "equipamento", "vidraria", "limpeza"], "description": "Categoria do item (reagente, equipamento, vidraria ou limpeza)."},
+                    "quantidade": {"type": "number", "description": "Quantidade inicial (ex: 500, 10, 1)."},
+                    "unidade_medida": {"type": "string", "description": "Unidade de medida (ex: g, ml, L, unidades, frascos)."},
+                    "laboratorio": {"type": "string", "description": "Laboratório onde o item ficará guardado (ex: LAT, POA, Croma, Lanagua, LabITech)."},
+                    "bancada": {"type": "string", "description": "Bancada, armário ou geladeira (ex: Bancada 01, Armário A, Geladeira 4°C)."},
+                    "complemento_local": {"type": "string", "description": "Complemento ou ponto de referência específico (ex: do lado da pia, prateleira 2 superior, gaveta 3)."},
+                    "marca": {"type": "string", "description": "Marca ou fabricante do item (ex: Sigma-Aldrich, Synth, Kasvi)."},
+                    "lote": {"type": "string", "description": "Número do lote do insumo/reagente."},
+                    "validade": {"type": "string", "description": "Data de validade se informada (YYYY-MM-DD ou DD/MM/YYYY)."},
+                    "frascos": {"type": "integer", "description": "Número de recipientes ou frascos, se especificado."}
+                },
+                "required": ["nome", "quantidade", "unidade_medida"]
+            }
+        }
     }
 ]
 
@@ -216,10 +255,11 @@ REGRAS DE FERRAMENTAS:
 4. Só chame a ferramenta quando tiver o pacote completo.
 
 [CONSULTA A PROCEDIMENTOS - RAG]
-1. Se o usuário perguntar COMO FAZER um experimento, análise ou procedimento (ex: "como fazer análise de ferro?", "qual o método para titulação?"), use a ferramenta consultar_rag para buscar nos documentos do laboratório.
-2. Se o usuário mencionar o nome de um método ou POP (ex: "método da fenantrolina", "POP-042"), também use consultar_rag.
-3. Depois de receber o resultado do RAG, traduza em linguagem natural e pergunte se o usuário quer agendar os recursos necessários.
-4. Para conversa fiada ou perguntas gerais (não sobre procedimentos), não chame a ferramenta, apenas responda."""
+1. Se o usuário perguntar QUAIS POPs ou procedimentos existem no laboratório, use a ferramenta listar_procedimentos. NUNCA invente códigos de POP (ex: POP-015, POP-028, etc.).
+2. Se o usuário perguntar COMO FAZER um experimento, análise ou procedimento (ex: "como fazer análise de ferro?"), use a ferramenta consultar_rag para buscar nos documentos do laboratório.
+3. Se o usuário mencionar o nome de um método ou POP, use consultar_rag.
+4. Depois de receber o resultado do RAG, traduza em linguagem natural e pergunte se o usuário quer agendar os recursos necessários.
+5. NUNCA invente informações ou documentos que não constem no retorno das ferramentas. Para conversa fiada ou perguntas gerais, responda com honestidade."""
 
     # 🧠 RECUPERANDO A MEMÓRIA DO USUÁRIO
     if telegram_id not in memoria_conversas:
@@ -297,13 +337,13 @@ Data e hora exatas de agora: {data_hora_atual} ({dia_semana}).
 Você recebeu documentos do banco de conhecimento do laboratório que são relevantes
 para a pergunta do usuário.
 
-INSTRUÇÕES:
-1. Use APENAS as informações contidas nos documentos fornecidos abaixo.
-2. Responda em LINGUAGEM NATURAL, de forma clara e concisa.
-3. Seja didático(a) — explique o procedimento em etapas quando aplicável.
-4. Ao final, pergunte educadamente se o usuário quer agendar os equipamentos ou recursos necessários.
-5. Se os documentos não tiverem informação suficiente para responder, avise o usuário honestamente.
-6. NÃO invente informações — USE APENAS o conteúdo dos documentos.
+INSTRUÇÕES ANTI-ALUCINAÇÃO:
+1. Use ESTRITAMENTE as informações contidas nos documentos fornecidos abaixo.
+2. É ESTRITAMENTE PROIBIDO inventar etapas, reagentes, normas ou números de POP (ex: NÃO invente POP-015, POP-028) que não estejam expressamente no texto abaixo.
+3. Responda em LINGUAGEM NATURAL, de forma clara, técnica e concisa.
+4. Seja didático(a) — explique o procedimento em etapas quando aplicável.
+5. Ao final, pergunte educadamente se o usuário quer agendar os equipamentos ou recursos necessários.
+6. Se os documentos não tiverem informação suficiente para responder, avise o usuário honestamente.
 7. Use formatação HTML simples quando ajudar (negrito para termos importantes).
 
 CONTEXTO DOS DOCUMENTOS ENCONTRADOS:
@@ -318,7 +358,7 @@ CONTEXTO DOS DOCUMENTOS ENCONTRADOS:
         response = await client.chat.completions.create(
             model=MODELO_GROQ,
             messages=mensagens,
-            temperature=0.3,  # Sem tools — evita loop de chamadas
+            temperature=0.0,  # Zero alucinação
         )
 
         resposta = response.choices[0].message.content
@@ -347,20 +387,44 @@ Data e hora exatas de agora: {data_hora} ({dia_semana}).
 
 Você tem acesso a ferramentas que executam ações REAIS no sistema:
 buscar_* (consulta inventário), registrar_agendamento (reserva),
-consultar_rag (busca procedimentos), registrar_consumo / registrar_descarte /
-registrar_reposicao (movimentação de estoque) e criar_protocolo_experimental.
+consultar_rag (busca conteúdo de procedimentos), listar_procedimentos (lista todos os POPs e protocolos reais),
+cadastrar_item (cadastro de novo reagente/equipamento/vidraria/limpeza no inventário),
+registrar_consumo / registrar_descarte / registrar_reposicao (movimentação de estoque) e criar_protocolo_experimental.
 
-REGRAS:
-1. Use as ferramentas quantas vezes forem necessárias para completar a tarefa do usuário.
+⛔ REGRA ANTI-ALUCINAÇÃO ABSOLUTA (POPs e Procedimentos):
+1. NUNCA, SOB HIPÓTESE ALGUMA, INVENTE OU CRIE POPs, CÓDIGOS FICTÍCIOS (como POP-015, POP-028, POP-001, etc.), NORMAS OU PROCEDIMENTOS QUE NÃO FORAM RETORNADOS PELAS FERRAMENTAS.
+2. Se o usuário perguntar quais POPs temos, quais procedimentos estão disponíveis, ou pedir uma lista do acervo, é OBRIGATÓRIO chamar a ferramenta `listar_procedimentos`.
+   - Você SÓ PODE mencionar e citar os documentos que a ferramenta `listar_procedimentos` retornar.
+   - Se o laboratório tiver apenas 1 ou 2 documentos cadastrados (ex: somente POP-042), informe com honestidade que no momento constam apenas esses.
+   - NUNCA monte tabelas com POPs fictícios de titulação, pHmetria, cromatografia ou outros métodos a pretexto de dar "exemplos" do acervo.
+   - NUNCA garanta que um documento está no banco sem antes ter chamado a ferramenta para verificar.
+3. Se o usuário perguntar COMO FAZER um procedimento ou método analítico (ex: "como fazer análise de ferro?"):
+   - Chame SEMPRE a ferramenta `consultar_rag`.
+   - Se `consultar_rag` retornar que não encontrou nenhum documento relacionado, NÃO invente um procedimento dizendo que ele está no acervo. Responda honestamente:
+     "Não encontrei esse procedimento no banco de conhecimento do laboratório. Para cadastrá-lo, envie o arquivo usando o comando /adicionar_pop."
+
+4. Quando o usuário perguntar o que você é capaz de fazer, o que você faz, quais são suas funções ou como você pode ajudá-lo:
+   Apresente-se como Orion (assistente inteligente do laboratório) e forneça um resumo estruturado e amigável das suas principais funções:
+   - 📦 Gestão de Estoque & Inventário: consulta de reagentes, vidrarias, equipamentos e limpeza (/estoque), cadastro de novos itens com localização (/adicionar_item), edição (/editar_item) e baixas de consumo, descarte ou reposição.
+   - 🗓️ Agendamento & Experimentos: reservas de equipamentos e bancadas, painel do dia (/hoje) e planejamento de experimentos (/experimento).
+   - 📋 Auditoria & Relatórios: registro de relatórios de uso e relatos de avarias/quebras (/relatorio) e questionário noturno de auditoria.
+   - 📚 POPs & Base de Conhecimento (RAG): consulta semântica a métodos reais do acervo, listagem de POPs (/pops) e upload de novos documentos (/adicionar_pop).
+   - 📊 Painel & Dashboard: resumo de KPIs e acesso ao sistema completo (/dashboard).
+   - 💬 Conversa Natural: o usuário pode pedir qualquer uma dessas tarefas diretamente em linguagem natural ou usar comandos rápidos (/ajuda para ver o guia completo).
+
+REGRAS GERAIS:
+5. Use as ferramentas quantas vezes forem necessárias para completar a tarefa do usuário.
    Ex: se ele quer agendar um experimento, BUSQUE os recursos primeiro e só então registre as reservas.
-2. Quando uma ferramenta retornar um resultado, ANALISE-O antes de decidir o próximo passo:
+6. Quando uma ferramenta retornar um resultado, ANALISE-O antes de decidir o próximo passo:
    - Se não encontrou o item, informe o usuário e pergunte o que ele quer fazer.
    - Se encontrou, use o resultado para a próxima chamada.
-3. Antes de executar ações que alteram dados (reservar, dar baixa, descartar, repor, salvar protocolo),
+7. Antes de executar ações que alteram dados (cadastrar item, reservar, dar baixa, descartar, repor, salvar protocolo),
    SEMPRE resuma o que você vai fazer e peça CONFIRMAÇÃO ao usuário.
-4. Só chame registrar_agendamento com todas as informações completas (item + início + fim).
-5. Responda em português, de forma clara e concisa.
-6. Quando terminar de executar tudo, entregue um resumo final em linguagem natural."""
+8. Só chame registrar_agendamento com todas as informações completas (item + início + fim).
+9. Quando o usuário pedir para cadastrar, adicionar, incluir ou dar entrada em um novo item, reagente, equipamento, vidraria ou insumo (ex: 'adiciona 500g de cloreto de sódio no LAT bancada 1 do lado da pia lote L-123 marca Synth'), use a ferramenta 'cadastrar_item' extraindo nome, categoria, quantidade, unidade_medida, laboratorio, bancada, complemento_local, marca, lote e validade.
+10. Formatação de texto: Use negrito (**palavra**) para destacar títulos e tópicos importantes. NUNCA utilize tags HTML como <br>, <p>, <div> ou <table>. NUNCA use sintaxe LaTeX (como \\[, \\], \\(, \\), \\text{...}, \\rightarrow, ^{...}, _{...}) para equações; escreva reações químicas e matemáticas de forma limpa e direta com símbolos legíveis e Unicode (ex: Al(s) → Al³⁺ + 3e⁻, 2H₂O + 2e⁻ → H₂(g) + 2OH⁻).
+11. Seja objetivo e conciso. Estruture procedimentos e protocolos em tópicos claros e diretos (materiais necessários e etapas numeradas), evitando respostas excessivamente longas ou prolixas.
+12. Responda em português, de forma clara, amigável e precisa."""
 
 
 async def executar_loop_funcoes(
@@ -396,17 +460,18 @@ async def executar_loop_funcoes(
     data_hora_atual = agora.strftime("%Y-%m-%d %H:%M")
     dia_semana = agora.strftime("%A")
 
-    prompt_sistema = PROMPT_ORQUESTRADOR.format(
-        data_hora=data_hora_atual,
-        dia_semana=dia_semana,
+    prompt_sistema = (
+        PROMPT_ORQUESTRADOR
+        .replace("{data_hora}", data_hora_atual)
+        .replace("{dia_semana}", dia_semana)
     )
 
-    # Memória de curto prazo
+    # Memória de curto prazo (reduzida para 4 mensagens para economizar tokens TPM)
     if telegram_id not in memoria_conversas:
         memoria_conversas[telegram_id] = []
     memoria_conversas[telegram_id].append({"role": "user", "content": texto_usuario})
-    if len(memoria_conversas[telegram_id]) > 6:
-        memoria_conversas[telegram_id] = memoria_conversas[telegram_id][-6:]
+    if len(memoria_conversas[telegram_id]) > 4:
+        memoria_conversas[telegram_id] = memoria_conversas[telegram_id][-4:]
 
     # 🔐 Confirmação pendente: resolve ANTES de mandar a mensagem ao LLM
     pendencia = confirmacoes_pendentes.get(telegram_id)
@@ -462,13 +527,25 @@ async def executar_loop_funcoes(
 
     try:
         for _ in range(max_iteracoes):
-            response = await client.chat.completions.create(
-                model=MODELO_GROQ,
-                messages=mensagens,
-                tools=TOOLS,
-                tool_choice="auto",
-                temperature=0.0,
-            )
+            try:
+                response = await client.chat.completions.create(
+                    model=MODELO_GROQ,
+                    messages=mensagens,
+                    tools=TOOLS,
+                    tool_choice="auto",
+                    temperature=0.0,
+                )
+            except RateLimitError as rle:
+                # Se bater no rate limit temporário da Groq, aguarda 2.5s e tenta novamente
+                print(f"Aviso: Rate limit 429 da Groq atingido. Aguardando 2.5s para tentar novamente... ({rle})")
+                await asyncio.sleep(2.5)
+                response = await client.chat.completions.create(
+                    model=MODELO_GROQ,
+                    messages=mensagens,
+                    tools=TOOLS,
+                    tool_choice="auto",
+                    temperature=0.0,
+                )
 
             mensagem = response.choices[0].message
 

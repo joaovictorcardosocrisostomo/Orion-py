@@ -4,18 +4,25 @@ from sqlmodel import Session, select
 from database.db import engine
 from database.models import Reserva, Usuario, Item, StatusReserva, StatusItem, CategoriaItem, NivelAcesso
 
-def verificar_conflito(item_id: uuid.UUID, data_inicio: datetime, data_fim: datetime) -> bool:
-    """Verifica se já existe uma reserva que cruza com o horário solicitado."""
+def verificar_conflito(
+    item_id: uuid.UUID,
+    data_inicio: datetime,
+    data_fim: datetime,
+    ignorar_reserva_id: uuid.UUID | None = None,
+) -> bool:
+    """Verifica se já existe uma reserva que cruza com o horário solicitado (agendada ou em andamento)."""
     with Session(engine) as session:
         statement = select(Reserva).where(
             (Reserva.item_id == item_id) &
-            (Reserva.status == StatusReserva.AGENDADO) &
+            (Reserva.status.in_([StatusReserva.AGENDADO, StatusReserva.EM_ANDAMENTO])) &
             (
                 # Lógica matemática de colisão de tempo
                 (Reserva.data_inicio < data_fim) & 
                 (Reserva.data_fim > data_inicio)
             )
         )
+        if ignorar_reserva_id is not None:
+            statement = statement.where(Reserva.id != ignorar_reserva_id)
         conflitos = session.exec(statement).all()
         return len(conflitos) > 0
 

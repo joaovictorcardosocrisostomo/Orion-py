@@ -189,3 +189,43 @@ async def fallback_arquivo_nao_recebido(message: Message, state: FSMContext):
         f"Digite /cancelar para sair.",
         parse_mode="HTML"
     )
+
+
+# ── Comando /procedimentos e /pops (Listagem do Acervo Real) ───────────
+
+@router.message(Command("procedimentos", "pops", "listar_pops"))
+async def cmd_listar_procedimentos(message: Message):
+    """Lista todos os POPs e protocolos realmente cadastrados no acervo."""
+    from sqlmodel import Session, select
+    from database.db import engine
+    from database.models import ProtocoloExperimental
+    from services.rag import listar_todos_procedimentos
+
+    pops = listar_todos_procedimentos()
+    with Session(engine) as session:
+        protocolos = session.exec(select(ProtocoloExperimental)).all()
+
+    if not pops and not protocolos:
+        await message.answer(
+            "📚 <b>Acervo de Procedimentos do Laboratório:</b>\n\n"
+            "Nenhum procedimento ou POP cadastrado no momento.\n"
+            "<i>Administradores podem adicionar novos documentos usando /adicionar_pop</i>",
+            parse_mode="HTML"
+        )
+        return
+
+    linhas = ["📚 <b>Procedimentos e POPs cadastrados no laboratório:</b>\n"]
+    if pops:
+        linhas.append("<b>📄 Procedimentos Operacionais Padrão (POPs no RAG):</b>")
+        for p in pops:
+            linhas.append(f"• <b>{p['titulo']}</b> <i>({p['tamanho_chars']} caracteres)</i>")
+        linhas.append("")
+
+    if protocolos:
+        linhas.append("<b>📋 Protocolos Experimentais:</b>")
+        for proto in protocolos:
+            linhas.append(f"• <b>{proto.titulo}</b> (v{proto.versao})")
+
+    linhas.append("\n💡 <i>Para consultar o conteúdo completo de um método, me pergunte: 'Como fazer o [nome do método]?'</i>")
+    await message.answer("\n".join(linhas), parse_mode="HTML")
+

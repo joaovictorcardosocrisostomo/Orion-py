@@ -3,10 +3,10 @@ import uuid
 from database.models import Item, CategoriaItem, StatusItem
 from services.estoque import editar_item
 from sqlmodel import Session
-from database.db import engine
+import database.db as db
 
 def test_editar_reagente():
-    with Session(engine) as session:
+    with Session(db.engine) as session:
         item = Item(
             nome="Ácido Clorídrico",
             categoria=CategoriaItem.REAGENTE,
@@ -23,7 +23,7 @@ def test_editar_reagente():
     sucesso = editar_item(item_id, {"lote": "LOTE-1234", "localizacao_exata": "Armário 2"})
     assert sucesso is True
 
-    with Session(engine) as session:
+    with Session(db.engine) as session:
         item_atualizado = session.get(Item, item_id)
         assert item_atualizado.lote == "LOTE-1234"
         assert item_atualizado.localizacao_exata == "Armário 2"

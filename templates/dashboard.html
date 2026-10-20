@@ -1,0 +1,4588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Orion LIMS — Painel Laboratorial Inteligente</title>
+  <meta name="description" content="Painel de controle laboratorial Orion. Gestão de experimentos, reagentes, equipamentos, POPs e RAG com estética moderna em tons de azul escuro.">
+
+  <!-- Fontes Google: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    :root {
+      /* Identidade Visual em Tons de Azul Escuro */
+      --bg-outer: #070b14;
+      --bg-shell: #0c1222;
+      --bg-sidebar: #090e1a;
+      --bg-card: #111a30;
+      --bg-card-sub: #162340;
+      --bg-card-hover: #1c2b4e;
+      --bg-pill: #131f38;
+      --border-subtle: rgba(59, 130, 246, 0.16);
+      --border-active: rgba(203, 246, 58, 0.45);
+
+      /* Cores de Destaque */
+      --neon-lime: #cbf63a;
+      --neon-lime-hover: #bde930;
+      --neon-lime-glow: rgba(203, 246, 58, 0.25);
+      
+      --royal-blue: #2563eb;
+      --royal-blue-hover: #1d4ed8;
+      --royal-blue-glow: rgba(37, 99, 235, 0.35);
+
+      --chart-orange: #ff8f3d;
+      --chart-purple: #9d7df8;
+      --chart-blue: #3b82f6;
+
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+
+      --text-white: #ffffff;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 26px;
+      --radius-shell: 32px;
+      --radius-full: 9999px;
+
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-outer);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 10% 90%, rgba(30, 58, 138, 0.15) 0%, transparent 50%),
+        radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 28px 28px;
+      color: var(--text-main);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 10px 14px;
+      box-sizing: border-box;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Container Principal da Dashboard */
+    .app-frame {
+      width: 100%;
+      max-width: 1680px;
+      height: 100%;
+      max-height: calc(100vh - 20px);
+      background: var(--bg-shell);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 20px 60px rgba(2, 6, 23, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ─── SIDEBAR ESQUERDA (DOCK NAVEGAÇÃO) ─── */
+    aside.app-sidebar {
+      width: 78px;
+      height: 100%;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 8px;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .brand-logo-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-md);
+      background: #111a30;
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--text-white);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      text-decoration: none;
+    }
+    .brand-logo-btn:hover {
+      border-color: var(--neon-lime);
+      box-shadow: 0 0 16px var(--neon-lime-glow);
+    }
+    .brand-logo-btn span.accent {
+      color: var(--neon-lime);
+    }
+
+    .nav-dock {
+      background: var(--bg-pill);
+      border: 1px solid var(--border-subtle);
+      border-radius: 28px;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .nav-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-full);
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .nav-btn svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .nav-btn:hover {
+      color: var(--text-white);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .nav-btn.active {
+      background: var(--neon-lime);
+      color: #0b0d0a;
+      box-shadow: 0 0 16px var(--neon-lime-glow);
+    }
+    .nav-tooltip,
+    .nav-btn .nav-tooltip,
+    .user-avatar-pill .nav-tooltip {
+      position: absolute;
+      left: calc(100% + 14px);
+      top: 50%;
+      transform: translateY(-50%) translateX(-6px);
+      background: #0d1527;
+      color: var(--text-white);
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+      z-index: 999;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+    }
+    .nav-btn:hover .nav-tooltip,
+    .user-avatar-pill:hover .nav-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    .sidebar-bottom {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: auto;
+      padding-bottom: 4px;
+    }
+
+    .btn-power {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-pill);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-power:hover {
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .user-avatar-pill {
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
+      min-height: 42px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, #1e3a8a, #0f172a);
+      border: 2px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      overflow: visible;
+    }
+    .user-avatar-pill:hover {
+      border-color: var(--neon-lime);
+      box-shadow: 0 0 14px var(--neon-lime-glow);
+    }
+    #user-initials {
+      font-family: var(--font-display);
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-white);
+      letter-spacing: 0.5px;
+      line-height: 1;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .user-status-dot {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 11px;
+      height: 11px;
+      border-radius: var(--radius-full);
+      background: var(--neon-lime);
+      border: 2px solid #090e1a;
+      pointer-events: none;
+    }
+
+    /* ─── CONTEÚDO PRINCIPAL ─── */
+    main.app-main {
+      flex: 1;
+      height: 100%;
+      padding: 18px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Top Header */
+    header.main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .greeting-box h1 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-white);
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      line-height: 1.2;
+    }
+    .greeting-box p {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-pill-box {
+      background: var(--bg-pill);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full);
+      padding: 7px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 280px;
+      transition: all 0.25s ease;
+    }
+    .search-pill-box:focus-within {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: #182747;
+    }
+    .search-pill-box svg {
+      width: 15px;
+      height: 15px;
+      stroke: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .search-pill-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-white);
+      font-size: 12.5px;
+      font-family: var(--font-body);
+      width: 100%;
+    }
+    .search-pill-box input::placeholder {
+      color: var(--text-dim);
+    }
+
+    /* Botão de Login / Perfil no Cabeçalho */
+    .btn-header-login {
+      background: var(--royal-blue);
+      color: var(--text-white);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-full);
+      padding: 7px 16px;
+      font-size: 12.5px;
+      font-weight: 600;
+      font-family: var(--font-body);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 18px var(--royal-blue-glow);
+    }
+    .btn-header-login:hover {
+      background: var(--royal-blue-hover);
+      transform: translateY(-1px);
+    }
+    .btn-header-login.logged-out {
+      background: #111a30;
+      border: 1px solid var(--border-subtle);
+      box-shadow: none;
+      color: var(--text-muted);
+    }
+    .btn-header-login.logged-out:hover {
+      background: #162340;
+      color: var(--text-white);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .btn-header-login .login-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+      background: var(--neon-lime);
+      display: inline-block;
+      transition: background 0.3s ease;
+    }
+    .btn-header-login.logged-out .login-dot {
+      background: #64748b;
+    }
+
+    /* ─── GRID DE CARDS RESUMO DA PÁGINA PRINCIPAL ─── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.65fr 1fr;
+      grid-gap: 14px;
+      flex: 1;
+    }
+
+    /* Card Padrão Azul Escuro */
+    .dashboard-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      position: relative;
+      transition: border-color 0.2s ease;
+    }
+    .dashboard-card:hover {
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    /* Links de Navegação Resumida nos Cabeçalhos de Card */
+    .card-head-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-white);
+    }
+    .card-link-more {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s ease;
+    }
+    .card-link-more:hover {
+      color: var(--neon-lime);
+    }
+
+    .card-select {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+    }
+    .card-select option {
+      background: #111a30;
+      color: var(--text-white);
+    }
+
+    /* CARD 1 (Top-Left): Painel de Telemetria & Gráficos SCADA/IoT */
+    .card-activity-stats {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .telemetry-live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #22d3ee;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      padding: 1.5px 7px;
+      border-radius: var(--radius-full);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .telemetry-dot-pulse {
+      width: 5.5px;
+      height: 5.5px;
+      border-radius: 50%;
+      background: #22d3ee;
+      box-shadow: 0 0 8px #22d3ee;
+      animation: pulseTelemetry 1.8s infinite;
+    }
+    @keyframes pulseTelemetry {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .chart-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Switcher Curva vs Barras (Pílulas Inspiradas no Painel Industrial) */
+    .chart-tab-switcher {
+      display: inline-flex;
+      background: rgba(10, 16, 30, 0.7);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-full);
+      padding: 2px;
+      gap: 2px;
+    }
+    .chart-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+    .chart-tab-btn:hover {
+      color: var(--text-white);
+    }
+    .chart-tab-btn.active {
+      background: rgba(37, 99, 235, 0.4);
+      color: #67e8f9;
+      box-shadow: 0 0 10px rgba(34, 211, 238, 0.2);
+    }
+
+    /* Linha de Legenda e Telemetria de Pico */
+    .chart-sub-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: -2px;
+      margin-bottom: 4px;
+      font-size: 10px;
+    }
+    .chart-legend-items {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .legend-item:hover, .legend-item.active {
+      color: var(--text-white);
+    }
+    .legend-item.dimmed {
+      opacity: 0.35;
+    }
+    .legend-line {
+      width: 14px;
+      height: 2.5px;
+      border-radius: 2px;
+    }
+    .legend-line.cyan {
+      background: #22d3ee;
+      box-shadow: 0 0 6px rgba(34, 211, 238, 0.6);
+    }
+    .legend-line.orange {
+      background: var(--chart-orange);
+      box-shadow: 0 0 6px rgba(255, 143, 61, 0.6);
+    }
+    .legend-line.blue {
+      background: var(--chart-blue);
+      box-shadow: 0 0 6px rgba(59, 130, 246, 0.6);
+    }
+    .chart-peak-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .chart-peak-indicator .peak-label {
+      color: var(--text-dim);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .chart-peak-indicator .peak-val {
+      color: #fde047;
+      font-weight: 700;
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.25);
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    /* Palco Visual do Gráfico (Coordenadas, Grid, SVG e Tooltip) */
+    .telemetry-stage {
+      position: relative;
+      display: flex;
+      height: 88px;
+      margin: 2px 0 6px 0;
+      background: rgba(6, 10, 20, 0.45);
+      border: 1px solid rgba(59, 130, 246, 0.12);
+      border-radius: var(--radius-md);
+      padding: 4px 6px 2px 2px;
+      overflow: visible;
+    }
+    .telemetry-y-axis {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 28px;
+      padding-bottom: 14px;
+      text-align: right;
+      padding-right: 4px;
+      font-family: var(--font-display);
+      font-size: 8.5px;
+      color: var(--text-dim);
+      user-select: none;
+    }
+    .telemetry-svg-wrap {
+      flex: 1;
+      position: relative;
+      height: 100%;
+    }
+    .telemetry-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      cursor: crosshair;
+    }
+
+    /* Crosshair & Interatividade */
+    .telemetry-crosshair {
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    /* HUD Tooltip Flutuante estilo SCADA (Direct from reference image!) */
+    .chart-hud-tooltip {
+      position: absolute;
+      pointer-events: none;
+      z-index: 100;
+      background: rgba(9, 14, 26, 0.94);
+      border: 1px solid rgba(234, 179, 8, 0.6);
+      border-radius: 8px;
+      padding: 6px 9px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 12px rgba(234, 179, 8, 0.25);
+      backdrop-filter: blur(8px);
+      min-width: 130px;
+      transform: translate(-50%, -105%);
+      transition: left 0.08s ease, top 0.08s ease, opacity 0.15s ease;
+    }
+    .hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 3px;
+    }
+    .hud-time {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      color: #fde047;
+    }
+    .hud-badge {
+      font-size: 8px;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: 0.06em;
+    }
+    .hud-metrics {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .hud-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 10px;
+    }
+    .hud-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 3px;
+    }
+    .hud-dot.cyan { background: #22d3ee; box-shadow: 0 0 6px #22d3ee; }
+    .hud-dot.orange { background: var(--chart-orange); box-shadow: 0 0 6px var(--chart-orange); }
+    .hud-dot.blue { background: var(--chart-blue); box-shadow: 0 0 6px var(--chart-blue); }
+    .hud-dot.lime { background: var(--neon-lime); box-shadow: 0 0 6px var(--neon-lime); }
+    .hud-lbl {
+      color: var(--text-muted);
+      font-size: 9.5px;
+    }
+    .hud-val {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 10.5px;
+      color: var(--text-white);
+    }
+    .hud-val.cyan { color: #67e8f9; }
+    .hud-val.orange { color: #fdba74; }
+    .hud-val.blue { color: #93c5fd; }
+
+    /* Eixo X com Labels Horários */
+    .telemetry-x-axis {
+      display: flex;
+      justify-content: space-between;
+      margin-left: 28px;
+      margin-top: -2px;
+      font-size: 8.5px;
+      font-family: var(--font-display);
+      color: var(--text-dim);
+      user-select: none;
+      padding: 0 4px;
+    }
+
+    /* Barras de Carga Neon (Modo Barras) */
+    .telemetry-bar {
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .telemetry-bar:hover {
+      filter: brightness(1.35) drop-shadow(0 0 6px rgba(34, 211, 238, 0.7));
+    }
+
+    .activity-metrics-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      border-top: 1px solid rgba(59, 130, 246, 0.12);
+      padding-top: 8px;
+    }
+    .metric-col p.label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .metric-col h3.value {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-white);
+      letter-spacing: -0.01em;
+    }
+    .metric-col .metric-sub {
+      display: flex;
+      gap: 8px;
+      font-size: 9.5px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* CARD 2 (Top-Right): Resumo de Agenda & Ocupação (Card Azul Royal) */
+    .card-calendar-blue {
+      background: var(--royal-blue);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      color: var(--text-white);
+      box-shadow: 0 16px 40px var(--royal-blue-glow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .card-calendar-blue .card-title {
+      color: var(--text-white);
+      font-size: 15px;
+    }
+    .calendar-nav-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.45);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .cal-nav-btn {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      transition: all 0.15s ease;
+    }
+    .cal-nav-btn:hover {
+      transform: scale(1.2);
+      color: var(--neon-lime);
+    }
+
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      opacity: 0.85;
+      margin: 6px 0 4px 0;
+    }
+
+    .calendar-days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      text-align: center;
+    }
+    .cal-day {
+      width: 27px;
+      height: 27px;
+      border-radius: var(--radius-full);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #0f172a;
+      color: #cbd5e1;
+      position: relative;
+    }
+    .cal-day:hover {
+      transform: scale(1.1);
+      border-color: var(--neon-lime);
+    }
+    .cal-day.dashed {
+      background: transparent;
+      border: 1px dashed rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.5);
+    }
+    .cal-day.is-today {
+      border: 1.5px solid var(--neon-lime);
+      color: #fff;
+    }
+    .cal-day.has-event::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      width: 4px;
+      height: 4px;
+      border-radius: var(--radius-full);
+      background: var(--neon-lime);
+      box-shadow: 0 0 6px var(--neon-lime-glow);
+    }
+    .cal-day.active-highlight {
+      background: var(--neon-lime) !important;
+      color: #0d0f12 !important;
+      font-weight: 800;
+      box-shadow: 0 0 14px var(--neon-lime-glow);
+    }
+    .cal-day.active-highlight.has-event::after {
+      background: #0d0f12;
+      box-shadow: none;
+    }
+
+    /* CARD 3 (Bottom-Left): Stack de Resumo de Inventário e Reposições */
+    .bottom-left-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    /* 3A. Disponibilidade de Equipamentos */
+    .card-radial-gauge {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .card-radial-gauge:hover {
+      border-color: rgba(59, 130, 246, 0.35);
+      background: var(--bg-card-sub);
+    }
+    .radial-info h4 {
+      font-family: var(--font-display);
+      font-size: 14px;
+      color: var(--text-white);
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .radial-info p.sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .radial-info p.goal {
+      font-size: 10.5px;
+      color: var(--text-dim);
+    }
+
+    .radial-chart-wrap {
+      width: 58px;
+      height: 58px;
+      position: relative;
+    }
+    .radial-chart-wrap svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+    .radial-chart-wrap .center-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: var(--font-display);
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-white);
+    }
+
+    /* 3B. Saúde do Estoque Crítico */
+    .card-linear-progress {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .card-linear-progress:hover {
+      border-color: rgba(59, 130, 246, 0.35);
+      background: var(--bg-card-sub);
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .progress-header h4 {
+      font-family: var(--font-display);
+      font-size: 14px;
+      color: var(--text-white);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .progress-header span.pct {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--neon-lime);
+    }
+    .bar-track {
+      width: 100%;
+      height: 8px;
+      background: #1c2b4e;
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--neon-lime);
+      border-radius: var(--radius-full);
+      box-shadow: 0 0 10px var(--neon-lime-glow);
+      transition: width 0.8s ease;
+    }
+    .progress-limits {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--text-dim);
+    }
+
+    /* CARD 4 (Bottom-Right): Resumo de Meus Experimentos */
+    .card-activities-list {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .activities-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .activities-top span.count-badge {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .filter-pills-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .pill-filter-btn {
+      padding: 4px 14px;
+      border-radius: var(--radius-full);
+      border: none;
+      background: var(--bg-card-sub);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .pill-filter-btn:hover {
+      color: var(--text-white);
+    }
+    .pill-filter-btn.active {
+      background: var(--neon-lime);
+      color: #000;
+    }
+
+    .activity-cards-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .activity-item-card {
+      background: var(--bg-card-sub);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 10px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 86px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .activity-item-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .activity-item-card.highlight-blue {
+      background: var(--royal-blue);
+      border-color: transparent;
+      box-shadow: 0 10px 25px var(--royal-blue-glow);
+    }
+    .activity-item-card.highlight-blue .act-title {
+      color: #ffffff;
+    }
+    .activity-item-card.highlight-blue .act-time {
+      color: #dbeafe;
+    }
+
+    .act-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .avatar-stack {
+      display: flex;
+      align-items: center;
+    }
+    .avatar-stack .mini-avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: var(--radius-full);
+      background: #1e3a8a;
+      border: 1.5px solid #111a30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8.5px;
+      font-weight: 700;
+      margin-left: -4px;
+    }
+    .avatar-stack .mini-avatar:first-child {
+      margin-left: 0;
+    }
+    .activity-item-card.highlight-blue .avatar-stack .mini-avatar {
+      border-color: var(--royal-blue);
+    }
+
+    .arrow-icon-top {
+      color: var(--text-dim);
+      transition: transform 0.2s ease;
+      font-size: 11px;
+    }
+    .activity-item-card:hover .arrow-icon-top {
+      transform: translate(2px, -2px);
+      color: var(--text-white);
+    }
+
+    .act-title {
+      font-family: var(--font-display);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-white);
+      line-height: 1.25;
+      margin-bottom: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .act-time {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Card tracejado "+ Novo Experimento" */
+    .activity-item-card.dashed-add {
+      background: transparent;
+      border: 1.5px dashed rgba(59, 130, 246, 0.3);
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .activity-item-card.dashed-add:hover {
+      border-color: var(--neon-lime);
+      color: var(--neon-lime);
+      background: rgba(203, 246, 58, 0.04);
+    }
+    .dashed-add .plus-icon {
+      font-size: 18px;
+      font-weight: 300;
+      margin-bottom: 2px;
+      line-height: 1;
+    }
+    .dashed-add span.lbl {
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+
+    /* ─── PÁGINA SEPARADA: ASSISTENTE ORION (CHAT IA) ─── */
+    .chat-view-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      height: 100%;
+      min-height: 520px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    .chat-header-bar {
+      padding: 18px 24px;
+      background: #0d1527;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-header-identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-bot-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--royal-blue), #1e3a8a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      box-shadow: 0 0 16px var(--royal-blue-glow);
+    }
+    .chat-header-identity h3 {
+      font-family: var(--font-display);
+      font-size: 16px;
+      color: var(--text-white);
+    }
+    .chat-header-identity p {
+      font-size: 11.5px;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .chat-header-identity p::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .chat-header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Área de Mensagens (Histórico Adequado) */
+    .chat-messages-scroll {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .chat-bubble {
+      max-width: 80%;
+      padding: 14px 18px;
+      border-radius: var(--radius-lg);
+      font-size: 13.5px;
+      line-height: 1.55;
+      position: relative;
+      animation: messageIn 0.25s ease-out;
+    }
+    @keyframes messageIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-bubble.bot {
+      align-self: flex-start;
+      background: #162340;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-bubble.bot .chat-p {
+      margin: 6px 0;
+      line-height: 1.6;
+      color: #e2e8f0;
+    }
+    .chat-bubble.bot .chat-h2,
+    .chat-bubble.bot .chat-h3 {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-white);
+      margin: 14px 0 6px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.25);
+    }
+    .chat-bubble.bot .chat-h4 {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: #93c5fd;
+      margin: 12px 0 6px 0;
+    }
+    .chat-bubble.bot .chat-h5 {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neon-lime);
+      margin: 10px 0 4px 0;
+    }
+    .chat-bubble.bot .chat-hr {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      margin: 12px 0;
+    }
+    .chat-bubble.bot .chat-ul,
+    .chat-bubble.bot .chat-ol {
+      margin: 6px 0 10px 0;
+      padding-left: 22px;
+    }
+    .chat-bubble.bot .chat-ul li,
+    .chat-bubble.bot .chat-ol li {
+      margin: 5px 0;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    .chat-bubble.bot strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .chat-bubble.bot em {
+      color: #93c5fd;
+      font-style: italic;
+    }
+    .chat-bubble.bot .chat-quote {
+      border-left: 3px solid var(--neon-lime);
+      background: rgba(203, 246, 58, 0.05);
+      padding: 8px 12px;
+      margin: 8px 0;
+      border-radius: 0 6px 6px 0;
+      color: #f1f5f9;
+      font-size: 13px;
+    }
+    .chat-bubble.bot .chat-code-block {
+      background: #090e1a;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      margin: 10px 0;
+      overflow-x: auto;
+      font-family: 'Fira Code', Consolas, monospace;
+      font-size: 12px;
+      color: #67e8f9;
+      line-height: 1.5;
+    }
+    .chat-bubble.bot .chat-inline-code {
+      background: rgba(59, 130, 246, 0.18);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'Fira Code', Consolas, monospace;
+      font-size: 12px;
+      color: #93c5fd;
+    }
+    .chat-bubble.bot .chat-table-wrap {
+      overflow-x: auto;
+      margin: 10px 0;
+      border-radius: 6px;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+    .chat-bubble.bot .chat-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+    .chat-bubble.bot .chat-table th {
+      background: #0d1527;
+      color: #93c5fd;
+      padding: 8px 12px;
+      font-weight: 700;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.25);
+    }
+    .chat-bubble.bot .chat-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+      color: #cbd5e1;
+    }
+    .chat-bubble.bot .chat-table tr:last-child td {
+      border-bottom: none;
+    }
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: var(--royal-blue);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 14px var(--royal-blue-glow);
+    }
+    .chat-bubble-time {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    /* Sugestões Rápidas (Chips) */
+    .chat-quick-chips {
+      padding: 10px 24px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      background: rgba(13, 21, 39, 0.6);
+      border-top: 1px solid var(--border-subtle);
+    }
+    .chat-chip-btn {
+      background: var(--bg-card-sub);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 11.5px;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .chat-chip-btn:hover {
+      color: var(--text-white);
+      border-color: var(--neon-lime);
+      background: rgba(203, 246, 58, 0.05);
+    }
+
+    /* Input do Chat */
+    .chat-input-row {
+      padding: 16px 24px;
+      background: #0d1527;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-input-field {
+      flex: 1;
+      background: #162340;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-white);
+      padding: 12px 18px;
+      border-radius: var(--radius-full);
+      font-size: 13.5px;
+      font-family: var(--font-body);
+      outline: none;
+    }
+    .chat-input-field:focus {
+      border-color: var(--royal-blue);
+    }
+    .chat-send-btn {
+      background: var(--neon-lime);
+      color: #080d16;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 16px var(--neon-lime-glow);
+      flex-shrink: 0;
+    }
+    .chat-send-btn:hover {
+      background: var(--neon-lime-hover);
+      transform: scale(1.05);
+    }
+
+    /* ─── ABAS EXPANDIDAS (Tabelas) ─── */
+    .tab-section-view {
+      display: none;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .tab-section-view.active {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .table-filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .table-filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .custom-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12.5px;
+      outline: none;
+      cursor: pointer;
+    }
+    .custom-select:focus {
+      border-color: var(--neon-lime);
+    }
+
+    .btn-action-lime {
+      background: var(--neon-lime);
+      color: #0b0d0a;
+      border: none;
+      padding: 9px 18px;
+      border-radius: var(--radius-full);
+      font-weight: 700;
+      font-size: 12.5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px var(--neon-lime-glow);
+    }
+    .btn-action-lime:hover {
+      background: var(--neon-lime-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-action-secondary {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-action-secondary:hover {
+      background: var(--bg-card-sub);
+      border-color: rgba(59, 130, 246, 0.35);
+    }
+
+    /* Tabelas estilizadas */
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 440px;
+    }
+    table.lims-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      text-align: left;
+    }
+    table.lims-table th {
+      padding: 9px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border-subtle);
+      background: #0d1527;
+      white-space: nowrap;
+    }
+    table.lims-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+      color: var(--text-main);
+      vertical-align: middle;
+    }
+    table.lims-table tr:hover td {
+      background: rgba(59, 130, 246, 0.04);
+    }
+
+    /* Badges de Status */
+    .tag-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tag-bom { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .tag-uso { background: rgba(37, 99, 235, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .tag-avaria { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tag-critico { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    /* Modais */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 500px;
+      padding: 28px;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+      animation: modalPop 0.2s ease-out;
+    }
+    @keyframes modalPop {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-head h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      color: var(--text-white);
+    }
+    .btn-close-modal {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .btn-close-modal:hover { color: var(--text-white); }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-white);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-family: var(--font-body);
+      outline: none;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--royal-blue);
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    /* Toast */
+    .toast-popup {
+      position: fixed;
+      bottom: 82px;
+      right: 28px;
+      background: #0f172a;
+      border: 1px solid var(--neon-lime);
+      color: var(--text-white);
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      display: none;
+      z-index: 2000;
+      animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* ─── ATALHO FLUTUANTE PARA O CHAT IA ─── */
+    .floating-chat-trigger {
+      position: fixed;
+      bottom: 24px;
+      right: 28px;
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: #ffffff;
+      border: 1px solid rgba(59, 130, 246, 0.45);
+      border-radius: var(--radius-full);
+      padding: 9px 18px 9px 12px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35), 0 0 16px rgba(59, 130, 246, 0.25);
+      z-index: 1000;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(8px);
+    }
+    .floating-chat-trigger:hover {
+      transform: translateY(-3px) scale(1.02);
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-color: var(--neon-lime);
+      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.45), 0 0 20px var(--neon-lime-glow);
+    }
+    .floating-chat-trigger .chat-sparkle-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: transform 0.25s ease;
+    }
+    .floating-chat-trigger:hover .chat-sparkle-icon {
+      transform: rotate(15deg) scale(1.1);
+    }
+    .floating-chat-trigger .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+      background: var(--neon-lime);
+      box-shadow: 0 0 8px var(--neon-lime-glow);
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.55; }
+    }
+
+    @keyframes redPulseAnimation {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+      70% { transform: scale(1.22); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .status-inactive-pulse {
+      animation: redPulseAnimation 1.5s infinite ease-in-out !important;
+      background: #ef4444 !important;
+    }
+    .chat-header-identity p.status-offline-text {
+      color: #f87171 !important;
+    }
+    .chat-header-identity p.status-offline-text::before {
+      background: #ef4444 !important;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.8) !important;
+    }
+
+    /* Responsividade */
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .activity-cards-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      body {
+        padding: 0;
+      }
+      .app-frame {
+        border-radius: 0;
+        min-height: 100vh;
+        border: none;
+        flex-direction: column;
+      }
+      aside.app-sidebar {
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        border-right: none;
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 12px 18px;
+      }
+      .nav-dock {
+        flex-direction: row;
+      }
+      .sparklines-area {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .activity-cards-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-frame">
+
+    <!-- ─── SIDEBAR ESQUERDA ─── -->
+    <aside class="app-sidebar">
+      <a class="brand-logo-btn" href="#" onclick="trocarVisualizacao('overview')" title="Orion LIMS">
+        O<span class="accent">.</span>
+      </a>
+
+      <!-- Dock Flutuante de Ícones -->
+      <nav class="nav-dock">
+        <!-- 1. Visão Geral (Ativo) -->
+        <button class="nav-btn active" id="nav-overview" onclick="trocarVisualizacao('overview')" title="Visão Geral">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span class="nav-tooltip">Visão Geral</span>
+        </button>
+
+        <!-- 2. Chat / Assistente Orion IA (Nova Página Dedicada) -->
+        <button class="nav-btn" id="nav-chat" onclick="trocarVisualizacao('chat')" title="Assistente Orion (Chat IA)">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span class="nav-tooltip">Assistente Orion (Chat IA)</span>
+        </button>
+
+        <!-- 3. Agenda & Reservas -->
+        <button class="nav-btn" id="nav-agendamentos" onclick="trocarVisualizacao('agendamentos')" title="Agenda & Reservas">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span class="nav-tooltip">Agenda & Reservas</span>
+        </button>
+
+        <!-- 4. Inventário & Estoque -->
+        <button class="nav-btn" id="nav-inventario" onclick="trocarVisualizacao('inventario')" title="Inventário & Estoque">
+          <svg viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          <span class="nav-tooltip">Inventário & Estoque</span>
+        </button>
+
+        <!-- 5. Reposições & Compras -->
+        <button class="nav-btn" id="nav-reposicoes" onclick="trocarVisualizacao('reposicoes')" title="Reposições & Compras">
+          <svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+          <span class="nav-tooltip">Reposições & Compras</span>
+        </button>
+
+        <!-- 6. POPs & Protocolos RAG -->
+        <button class="nav-btn" id="nav-protocolos" onclick="trocarVisualizacao('protocolos')" title="POPs & Protocolos RAG">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span class="nav-tooltip">POPs & Base RAG</span>
+        </button>
+
+        <!-- 7. Auditoria & Logs -->
+        <button class="nav-btn" id="nav-logs" onclick="trocarVisualizacao('logs')" title="Auditoria & Logs">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span class="nav-tooltip">Auditoria & Logs</span>
+        </button>
+      </nav>
+
+      <!-- Rodapé da Sidebar: Perfil de Acesso & Identificação do Usuário -->
+      <div class="sidebar-bottom">
+        <div class="user-avatar-pill" onclick="abrirModalAuth()" id="sidebar-user-avatar" title="Perfil do Usuário / Login">
+          <span id="user-initials">OR</span>
+          <div class="user-status-dot" id="user-status-dot"></div>
+          <span class="nav-tooltip" id="avatar-tooltip">Meu Perfil / Login</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─── CONTEÚDO PRINCIPAL ─── -->
+    <main class="app-main">
+
+      <!-- Cabeçalho Superior -->
+      <header class="main-header">
+        <div class="greeting-box">
+          <h1 id="user-greeting">Olá, Pesquisador!</h1>
+          <p id="user-subgreeting">Pronto para os experimentos de hoje?</p>
+        </div>
+
+        <div class="header-actions">
+          <div class="search-pill-box">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="global-search-input" placeholder="Buscar atividades, reagentes, POPs..." oninput="executarBuscaRapida(this.value)">
+          </div>
+        </div>
+      </header>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 1. VISÃO GERAL (BLOCOS COMO RESUMO DAS DEMAIS PÁGINAS)          -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view active" id="view-overview">
+        <div class="dashboard-grid">
+
+          <!-- BLOCO 1 (Superior Esquerdo): TELEMETRIA & ATIVIDADE LABORATORIAL -->
+          <div class="dashboard-card card-activity-stats">
+            <!-- Cabeçalho de Controle e Modo do Gráfico -->
+            <div class="card-head-row">
+              <div class="card-title-group">
+                <span class="card-title">Atividade Laboratorial</span>
+                <span style="font-size: 11px; color: var(--text-dim);">•</span>
+                <a class="card-link-more" onclick="trocarVisualizacao('logs')" title="Abrir histórico de auditoria">Auditoria ↗</a>
+                <span class="telemetry-live-badge"><span class="telemetry-dot-pulse"></span>Telemetria</span>
+              </div>
+
+              <div class="chart-header-actions">
+                <!-- Seletor Curva vs Barras (Inspiração direta do painel de referência) -->
+                <div class="chart-tab-switcher">
+                  <button type="button" class="chart-tab-btn active" id="btn-chart-mode-curve" onclick="alternarModoGrafico('curve')" title="Curva de Demanda & Consumo">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    Curva
+                  </button>
+                  <button type="button" class="chart-tab-btn" id="btn-chart-mode-bars" onclick="alternarModoGrafico('bars')" title="Distribuição de Carga">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    Barras
+                  </button>
+                </div>
+
+                <!-- Seletor de Período -->
+                <select class="card-select" id="select-periodo-atividade" onchange="alterarPeriodoAtividade(this.value)">
+                  <option value="today">Hoje ▾</option>
+                  <option value="week">Esta Semana ▾</option>
+                  <option value="month">Este Mês ▾</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Linha de Legendas com Indicador de Pico (como na referência) -->
+            <div class="chart-sub-header">
+              <div class="chart-legend-items">
+                <div class="legend-item active" id="legend-consumo" onclick="focarSerieGrafico('consumo')" title="Clique para isolar consumo">
+                  <span class="legend-line cyan"></span>
+                  <span class="legend-text">Consumo Real (g/mL)</span>
+                </div>
+                <div class="legend-item active" id="legend-planejado" onclick="focarSerieGrafico('planejado')" title="Clique para isolar meta">
+                  <span class="legend-line orange"></span>
+                  <span class="legend-text">Planejado (g/mL)</span>
+                </div>
+                <div class="legend-item active" id="legend-ocupacao" onclick="focarSerieGrafico('ocupacao')" title="Clique para isolar ocupação">
+                  <span class="legend-line blue"></span>
+                  <span class="legend-text">Ocupação (h)</span>
+                </div>
+              </div>
+              <div class="chart-peak-indicator" id="chart-peak-indicator">
+                <span class="peak-label">PICO:</span>
+                <span class="peak-val" id="peak-badge-val">16:00 (94 g/mL)</span>
+              </div>
+            </div>
+
+            <!-- Palco Visual do Gráfico com Eixos, Grid, Gradiente e Crosshair -->
+            <div class="telemetry-stage" id="telemetry-stage" onmousemove="aoMoverMouseGrafico(event)" onmouseleave="aoSairMouseGrafico()">
+              <!-- Escala do Eixo Y -->
+              <div class="telemetry-y-axis" id="telemetry-y-axis">
+                <span id="y-tick-4">120</span>
+                <span id="y-tick-3">80</span>
+                <span id="y-tick-2">40</span>
+                <span id="y-tick-1">0</span>
+              </div>
+
+              <!-- Canvas SVG do Gráfico -->
+              <div class="telemetry-svg-wrap" id="telemetry-svg-wrap">
+                <svg class="telemetry-svg" id="telemetry-svg" viewBox="0 0 500 78" preserveAspectRatio="none">
+                  <defs>
+                    <!-- Gradiente de Preenchimento da Curva de Consumo -->
+                    <linearGradient id="grad-area-cons" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.38"/>
+                      <stop offset="70%" stop-color="#22d3ee" stop-opacity="0.08"/>
+                      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.0"/>
+                    </linearGradient>
+
+                    <!-- Gradiente de Preenchimento da Curva Planejada -->
+                    <linearGradient id="grad-area-plan" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#ff8f3d" stop-opacity="0.22"/>
+                      <stop offset="80%" stop-color="#ff8f3d" stop-opacity="0.04"/>
+                      <stop offset="100%" stop-color="#ff8f3d" stop-opacity="0.0"/>
+                    </linearGradient>
+
+                    <!-- Gradiente para Barras Neon de Carga -->
+                    <linearGradient id="grad-neon-bar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.95"/>
+                      <stop offset="40%" stop-color="#0284c7" stop-opacity="0.75"/>
+                      <stop offset="100%" stop-color="#0c4a6e" stop-opacity="0.2"/>
+                    </linearGradient>
+
+                    <!-- Filtro de Brilho Neon para Linhas -->
+                    <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#22d3ee" flood-opacity="0.6"/>
+                    </filter>
+                    <filter id="glow-orange" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#ff8f3d" flood-opacity="0.6"/>
+                    </filter>
+                  </defs>
+
+                  <!-- Linhas Horizontais da Grade (Subtle Grid) -->
+                  <g class="chart-grid-lines">
+                    <line x1="0" y1="6" x2="500" y2="6" stroke="rgba(59, 130, 246, 0.12)" stroke-dasharray="2 3"/>
+                    <line x1="0" y1="28" x2="500" y2="28" stroke="rgba(59, 130, 246, 0.10)" stroke-dasharray="2 3"/>
+                    <line x1="0" y1="50" x2="500" y2="50" stroke="rgba(59, 130, 246, 0.10)" stroke-dasharray="2 3"/>
+                    <line x1="0" y1="72" x2="500" y2="72" stroke="rgba(59, 130, 246, 0.22)"/>
+                  </g>
+
+                  <!-- Modo 1: Curva de Demanda e Consumo -->
+                  <g id="chart-mode-curves-group">
+                    <!-- Áreas Preenchidas com Gradiente Translúcido -->
+                    <path id="chart-area-planejado" d="" fill="url(#grad-area-plan)"/>
+                    <path id="chart-area-consumo" d="" fill="url(#grad-area-cons)"/>
+
+                    <!-- Curvas Traçadas -->
+                    <path id="chart-line-ocupacao" d="" fill="none" stroke="var(--chart-blue)" stroke-width="1.6" stroke-dasharray="3 2" stroke-linecap="round"/>
+                    <path id="chart-line-planejado" d="" fill="none" stroke="var(--chart-orange)" stroke-width="2.2" stroke-linecap="round" filter="url(#glow-orange)"/>
+                    <path id="chart-line-consumo" d="" fill="none" stroke="#22d3ee" stroke-width="2.6" stroke-linecap="round" filter="url(#glow-cyan)"/>
+                  </g>
+
+                  <!-- Modo 2: Distribuição por Barras Verticais Neon (como na referência) -->
+                  <g id="chart-mode-bars-group" style="display: none;">
+                    <!-- Preenchido via JavaScript -->
+                  </g>
+
+                  <!-- Linha Guia Vertical (Crosshair) & Pontos de Alvo -->
+                  <g id="chart-crosshair-group" style="opacity: 0; pointer-events: none; transition: opacity 0.15s ease;">
+                    <line id="chart-crosshair-line" x1="0" y1="4" x2="0" y2="72" stroke="rgba(34, 211, 238, 0.75)" stroke-width="1.2" stroke-dasharray="2 2"/>
+                    <circle id="chart-point-cons" cx="0" cy="0" r="4.5" fill="#22d3ee" stroke="#090e1a" stroke-width="2"/>
+                    <circle id="chart-point-plan" cx="0" cy="0" r="4" fill="#ff8f3d" stroke="#090e1a" stroke-width="2"/>
+                    <circle id="chart-point-horas" cx="0" cy="0" r="3.5" fill="var(--chart-blue)" stroke="#090e1a" stroke-width="2"/>
+                  </g>
+                </svg>
+
+                <!-- Tooltip HUD Flutuante no estilo do Painel Industrial -->
+                <div id="chart-hud-tooltip" class="chart-hud-tooltip" style="display: none;">
+                  <div class="hud-top">
+                    <span class="hud-time" id="hud-time-val">14:00</span>
+                    <span class="hud-badge">TELEMETRIA</span>
+                  </div>
+                  <div class="hud-metrics">
+                    <div class="hud-row">
+                      <span><span class="hud-dot cyan"></span><span class="hud-lbl">Consumo:</span></span>
+                      <strong class="hud-val cyan" id="hud-val-cons">85.0 g/mL</strong>
+                    </div>
+                    <div class="hud-row">
+                      <span><span class="hud-dot orange"></span><span class="hud-lbl">Planejado:</span></span>
+                      <strong class="hud-val orange" id="hud-val-plan">75.0 g/mL</strong>
+                    </div>
+                    <div class="hud-row">
+                      <span><span class="hud-dot blue"></span><span class="hud-lbl">Bancada:</span></span>
+                      <strong class="hud-val blue" id="hud-val-horas">3.1 h</strong>
+                    </div>
+                    <div class="hud-row">
+                      <span><span class="hud-dot lime"></span><span class="hud-lbl">Operações:</span></span>
+                      <strong class="hud-val" id="hud-val-usos">32 registros</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Eixo X com Timestamps formatados -->
+            <div class="telemetry-x-axis" id="telemetry-x-axis">
+              <span>08:00</span>
+              <span>10:00</span>
+              <span>12:00</span>
+              <span>14:00</span>
+              <span>16:00</span>
+              <span>18:00</span>
+              <span>20:00</span>
+              <span>22:00</span>
+            </div>
+
+            <!-- Métricas Numéricas Inferiores (Preservadas com Ações & Tooltips) -->
+            <div class="activity-metrics-row">
+              <div class="metric-col" onclick="trocarVisualizacao('logs')" onmouseenter="destacarMetricaGrafico('usos')" onmouseleave="removerDestaqueMetrica()" style="cursor: pointer;" title="Ver histórico de auditoria">
+                <p class="label">Consumos & Usos</p>
+                <h3 class="value" id="val-steps">2.001</h3>
+                <div class="metric-sub">
+                  <span>Meta 8.000</span>
+                  <span>Média 9.450</span>
+                </div>
+              </div>
+
+              <div class="metric-col" onclick="trocarVisualizacao('inventario')" onmouseenter="destacarMetricaGrafico('consumo')" onmouseleave="removerDestaqueMetrica()" style="cursor: pointer;" title="Ver inventário de reagentes">
+                <p class="label">Volume & Reagentes</p>
+                <h3 class="value" id="val-calories">200 g/mL</h3>
+                <div class="metric-sub">
+                  <span>Meta 500</span>
+                  <span>Média 646</span>
+                </div>
+              </div>
+
+              <div class="metric-col" onclick="trocarVisualizacao('agendamentos')" onmouseenter="destacarMetricaGrafico('horas')" onmouseleave="removerDestaqueMetrica()" style="cursor: pointer;" title="Ver agenda de equipamentos">
+                <p class="label">Tempo em Bancada</p>
+                <h3 class="value" id="val-act-time">1h 45min</h3>
+                <div class="metric-sub">
+                  <span>Meta 2h</span>
+                  <span>Média 2h 30min</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCO 2 (Superior Direito): RESUMO DA PÁGINA AGENDA & DIAS ATIVOS (Card Azul Royal) -->
+          <div class="card-calendar-blue">
+            <div class="card-head-row">
+              <div class="card-title-group">
+                <span class="card-title">Dias Ativos & Agenda</span>
+                <span style="font-size: 11px; opacity: 0.6;">•</span>
+                <a class="card-link-more" onclick="trocarVisualizacao('agendamentos')" style="color: #bfdbfe;" title="Ver todas as reservas">Agenda ↗</a>
+              </div>
+              <div class="calendar-nav-wrap">
+                <button class="cal-nav-btn" onclick="navegarMesCalendario(-1)" title="Mês Anterior">‹</button>
+                <span id="calendar-month-title" style="font-size: 12px; font-weight: 700; color: #fff;">Outubro 2026</span>
+                <button class="cal-nav-btn" onclick="navegarMesCalendario(1)" title="Próximo Mês">›</button>
+              </div>
+            </div>
+
+            <div class="calendar-weekdays">
+              <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span>
+            </div>
+
+            <div class="calendar-days-grid" id="calendar-days-grid">
+              <!-- Renderizado dinamicamente com os dias ativos reais do mês -->
+            </div>
+          </div>
+
+          <!-- BLOCO 3 (Inferior Esquerdo): RESUMO DE INVENTÁRIO E REPOSIÇÕES -->
+          <div class="bottom-left-stack">
+
+            <!-- 3A. Resumo de Equipamentos (Página Inventário) -->
+            <div class="card-radial-gauge" onclick="trocarVisualizacao('inventario')" title="Ver inventário completo de equipamentos">
+              <div class="radial-info">
+                <h4>
+                  Disponibilidade de Equipamentos
+                  <span style="font-size: 11px; color: var(--neon-lime);">↗</span>
+                </h4>
+                <p class="sub">Calibração e prontidão em dia</p>
+                <p class="goal">Meta: 100% disponíveis</p>
+              </div>
+
+              <div class="radial-chart-wrap">
+                <svg viewBox="0 0 36 36">
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#1c2b4e" stroke-width="3.8"/>
+                  <path id="radial-progress-arc" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--neon-lime)" stroke-dasharray="94, 100" stroke-width="3.8" stroke-linecap="round"/>
+                </svg>
+                <div class="center-text" id="radial-center-val">7.45h</div>
+              </div>
+            </div>
+
+            <!-- 3B. Resumo de Estoque & Reposições Críticas (Página Reposições) -->
+            <div class="card-linear-progress" onclick="trocarVisualizacao('reposicoes')" title="Ver lista de reposições pendentes">
+              <div class="progress-header">
+                <h4>
+                  Saúde do Estoque Geral
+                  <span style="font-size: 11px; color: var(--neon-lime);">↗</span>
+                </h4>
+                <span class="pct" id="progress-pct-val">80% abastecido</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" id="progress-fill-bar" style="width: 80%;"></div>
+              </div>
+              <div class="progress-limits">
+                <span id="progress-min-lbl">Crítico: 5 itens</span>
+                <span id="progress-max-lbl">Ideal: 120 itens</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- BLOCO 4 (Inferior Direito): RESUMO DE MEUS EXPERIMENTOS & SESSÕES -->
+          <div class="dashboard-card card-activities-list">
+            <div>
+              <div class="activities-top">
+                <div class="card-title-group">
+                  <span class="card-title">Meus Experimentos</span>
+                  <span style="font-size: 11px; color: var(--text-dim);">•</span>
+                  <a class="card-link-more" onclick="trocarVisualizacao('agendamentos')">Ver Todos ↗</a>
+                </div>
+                <span class="count-badge" id="activities-count-badge">Você tem 3 atividades planejadas</span>
+              </div>
+
+              <!-- Filtros em Pílula -->
+              <div class="filter-pills-row">
+                <button class="pill-filter-btn active" onclick="filtrarCardsAtividade('all', this)">Todos</button>
+                <button class="pill-filter-btn" onclick="filtrarCardsAtividade('alone', this)">Individuais</button>
+                <button class="pill-filter-btn" onclick="filtrarCardsAtividade('friends', this)">Em Equipe</button>
+              </div>
+            </div>
+
+            <!-- Grid de 4 Cards de Atividade -->
+            <div class="activity-cards-row" id="activity-cards-container">
+              <!-- Renderizado via JavaScript com dados dinâmicos -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 2. PÁGINA SEPARADA: ASSISTENTE ORION (CHAT IA & RAG)             -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-chat">
+        <div class="chat-view-container">
+          <!-- Cabeçalho do Chat -->
+          <div class="chat-header-bar">
+            <div class="chat-header-identity">
+              <div class="chat-bot-icon">✨</div>
+              <div>
+                <h3>Orion Cientista AI</h3>
+                <p id="chat-connection-status">Online & Conectado à Base RAG do Laboratório</p>
+              </div>
+            </div>
+            <div class="chat-header-actions" style="display: flex; gap: 8px;">
+              <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+                ← Visão Geral
+              </button>
+              <button class="btn-action-secondary" style="padding: 6px 14px; font-size: 11.5px;" onclick="limparHistoricoChat()">
+                🗑️ Limpar Conversa
+              </button>
+            </div>
+          </div>
+
+          <!-- Histórico Adequado de Mensagens -->
+          <div class="chat-messages-scroll" id="chat-messages-list">
+            <!-- Balão de boas-vindas inicial -->
+            <div class="chat-bubble bot">
+              <p class="chat-p">👋 <strong>Olá! Sou o Orion</strong>, inteligência artificial integrada ao laboratório.</p>
+              <p class="chat-p">Posso te ajudar a <strong>consultar procedimentos (POPs)</strong>, sugerir etapas experimentais, verificar estoque de reagentes e indicar o tempo necessário para cada análise.</p>
+              <div class="chat-bubble-time">Agora</div>
+            </div>
+          </div>
+
+          <!-- Sugestões Rápidas (Chips) -->
+          <div class="chat-quick-chips" id="chat-quick-chips">
+            <button class="chat-chip-btn" onclick="enviarMensagemRapida('Como fazer análise de ferro?')">
+              🧪 Como fazer análise de ferro?
+            </button>
+            <button class="chat-chip-btn" onclick="enviarMensagemRapida('Quais POPs estão cadastrados?')">
+              📚 Quais POPs estão cadastrados?
+            </button>
+            <button class="chat-chip-btn" onclick="enviarMensagemRapida('Como realizar a titulação com ácido acético?')">
+              ⚗️ Como titular com ácido acético?
+            </button>
+            <button class="chat-chip-btn" onclick="enviarMensagemRapida('Quais equipamentos estão disponíveis hoje?')">
+              ⚙️ Equipamentos disponíveis hoje
+            </button>
+          </div>
+
+          <!-- Campo de Envio de Mensagem -->
+          <div class="chat-input-row">
+            <input type="text" class="chat-input-field" id="chat-input-box" placeholder="Pergunte sobre procedimentos, POPs ou experimentos..." onkeydown="if(event.key==='Enter') enviarMensagemChat()">
+            <button class="chat-send-btn" id="btn-chat-send" onclick="enviarMensagemChat()" title="Enviar mensagem">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 3. PÁGINA: AGENDA & AGENDAMENTOS COMPLETOS                      -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-agendamentos">
+        <div class="table-filter-bar">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+              ← Visão Geral
+            </button>
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 18px; color: var(--text-white);">
+                📅 Reservas & Sessões de Bancada
+              </h2>
+              <p style="font-size: 12.5px; color: var(--text-muted);">
+                Controle de horários de uso de espectrofotômetros, fornos, cromatógrafos e bancadas.
+              </p>
+            </div>
+          </div>
+          <button class="btn-action-lime" onclick="abrirModalNovoAgendamento()">+ Nova Reserva</button>
+        </div>
+
+        <div class="table-container">
+          <table class="lims-table">
+            <thead>
+              <tr>
+                <th>Equipamento / Recurso</th>
+                <th>Laboratório</th>
+                <th>Pesquisador</th>
+                <th>Início</th>
+                <th>Término</th>
+                <th>Duração</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-agendamentos">
+              <tr><td colspan="8" style="text-align:center; padding: 30px;">Carregando histórico de reservas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 4. PÁGINA: INVENTÁRIO & ESTOQUE                                 -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-inventario">
+        <div class="table-filter-bar">
+          <div class="table-filter-group" style="align-items: center;">
+            <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+              ← Visão Geral
+            </button>
+            <select class="custom-select" id="inv-categoria" onchange="carregarItensInventario()">
+              <option value="todos">Todas as Categorias</option>
+              <option value="reagente">🧪 Reagentes</option>
+              <option value="equipamento">⚙️ Equipamentos</option>
+              <option value="vidraria">⚗️ Vidrarias</option>
+              <option value="limpeza">🧹 Limpeza</option>
+            </select>
+
+            <select class="custom-select" id="inv-lab" onchange="carregarItensInventario()">
+              <option value="todos">Todos os Laboratórios</option>
+              <option value="LAT">LAT</option>
+              <option value="POA">POA</option>
+              <option value="Croma">Croma</option>
+              <option value="Lanagua">Lanagua</option>
+              <option value="LabITech">LabITech</option>
+            </select>
+
+            <select class="custom-select" id="inv-status" onchange="carregarItensInventario()">
+              <option value="todos">Todos os Status</option>
+              <option value="Bom">Bom / Disponível</option>
+              <option value="Em uso">Em uso</option>
+              <option value="Requer manutenção/calibração">Manutenção</option>
+              <option value="Esgotado">Esgotado</option>
+              <option value="Quebrado">Quebrado</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-action-secondary" onclick="exportarInventarioCSV()">⬇️ Exportar CSV</button>
+            <button class="btn-action-lime" onclick="abrirModalNovoItem()">+ Cadastrar Item</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="lims-table">
+            <thead>
+              <tr>
+                <th>Item / Insumo</th>
+                <th>Categoria</th>
+                <th>Qtd. Atual</th>
+                <th>Laboratório / Local</th>
+                <th>Lote / Marca</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-inventario">
+              <tr><td colspan="7" style="text-align:center; padding: 30px;">Carregando inventário...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 5. PÁGINA: REPOSIÇÕES & COMPRAS CRÍTICAS                       -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-reposicoes">
+        <div class="table-filter-bar">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+              ← Visão Geral
+            </button>
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 18px; color: var(--text-white);">
+                🚨 Reposições Solicitadas & Estoque Crítico
+              </h2>
+              <p style="font-size: 12.5px; color: var(--text-muted);" id="reposicoes-counter-lbl">0 itens sinalizados</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="lims-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Categoria</th>
+                <th>Qtd. Atual</th>
+                <th>Laboratório</th>
+                <th>Urgência</th>
+                <th>Solicitante</th>
+                <th>Motivo / Observação</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-reposicoes">
+              <tr><td colspan="8" style="text-align:center; padding: 30px;">Carregando reposições...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 6. PÁGINA: POPs & PROTOCOLOS RAG                                -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-protocolos">
+        <div class="table-filter-bar">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+              ← Visão Geral
+            </button>
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 18px; color: var(--text-white);">
+                📚 POPs e Protocolos Experimentais (RAG)
+              </h2>
+              <p style="font-size: 12.5px; color: var(--text-muted);">
+                Acervo de procedimentos operacionais padrão indexados para consulta semântica do bot e do assistente.
+              </p>
+            </div>
+          </div>
+          <button class="btn-action-lime" onclick="trocarVisualizacao('chat')">💬 Abrir Assistente Orion</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; margin-top: 10px; flex: 1; align-content: start;" id="grid-protocolos-cards">
+          <!-- Renderizado via JS -->
+        </div>
+      </div>
+
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <!-- 7. PÁGINA: AUDITORIA & LOGS DE USO                              -->
+      <!-- ═════════════════════════════════════════════════════════════════ -->
+      <div class="tab-section-view" id="view-logs">
+        <div class="table-filter-bar">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-action-secondary" style="padding: 6px 12px; font-size: 11.5px;" onclick="trocarVisualizacao('overview')" title="Voltar à Visão Geral">
+              ← Visão Geral
+            </button>
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 18px; color: var(--text-white);">
+                📋 Auditoria Pós-Uso & Histórico de Consumo
+              </h2>
+              <p style="font-size: 12.5px; color: var(--text-muted);">
+                Rastreabilidade de reagentes consumidos, vidrarias avariadas e devoluções de bancada.
+              </p>
+            </div>
+          </div>
+          <button class="btn-action-lime" onclick="abrirModalRegistrarLog()">+ Registrar Consumo / Avaria</button>
+        </div>
+
+        <div class="table-container">
+          <table class="lims-table">
+            <thead>
+              <tr>
+                <th>Data / Hora</th>
+                <th>Pesquisador</th>
+                <th>Item Utilizado</th>
+                <th>Consumo</th>
+                <th>Estado Devolvido</th>
+                <th>Observações / Relato</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-logs">
+              <tr><td colspan="6" style="text-align:center; padding: 30px;">Carregando logs de auditoria...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- MODAIS & FORMULÁRIOS                                            -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+
+  <!-- Modal: Identificação do Pesquisador / Perfil do Usuário com Logout -->
+  <div class="modal-backdrop" id="modal-auth">
+    <!-- Modo 1: Tela de Login / Identificação (quando desconectado ou ao trocar) -->
+    <div class="modal-box" id="auth-box-login" style="max-width: 460px;">
+      <div class="modal-head">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🔬</span>
+          <h3 id="auth-title">Acesso ao Orion LIMS</h3>
+        </div>
+        <button class="btn-close-modal" onclick="fecharModalAuth()">&times;</button>
+      </div>
+
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px;">
+        Identifique-se para agendar bancadas, registrar consumos de reagentes e gerenciar o inventário.
+      </p>
+
+      <!-- Seleção Rápida de Usuários Existentes -->
+      <div class="form-group" id="group-quick-users" style="display: none;">
+        <label>Pesquisadores Registrados:</label>
+        <div id="quick-users-container" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Seu Nome ou ID do Telegram:</label>
+        <input type="text" id="auth-nome-input" placeholder="Ex: João Victor ou 6103903943">
+      </div>
+
+      <div class="form-group">
+        <label>Nível de Acesso Desejado:</label>
+        <select id="auth-nivel-input" onchange="alternarCampoSenhaAdmin(this.value)">
+          <option value="Membro">Pesquisador / Membro</option>
+          <option value="Administrador">👑 Administrador</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="group-auth-senha" style="display: none;">
+        <label>Senha Mestre de Administrador:</label>
+        <input type="password" id="auth-senha-input" placeholder="Senha mestre do laboratório">
+      </div>
+
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button class="btn-action-secondary" onclick="fecharModalAuth()">Continuar como Visitante</button>
+        <button class="btn-action-lime" onclick="executarLogin()">Conectar ➔</button>
+      </div>
+    </div>
+
+    <!-- Modo 2: Tela de Perfil do Pesquisador (quando logado) -->
+    <div class="modal-box" id="auth-box-profile" style="max-width: 440px; display: none;">
+      <div class="modal-head">
+        <h3>Perfil do Pesquisador</h3>
+        <button class="btn-close-modal" onclick="fecharModalAuth()">&times;</button>
+      </div>
+
+      <div style="background: var(--bg-card-sub); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 18px;">
+        <div style="width: 52px; height: 52px; border-radius: var(--radius-full); background: var(--royal-blue); border: 2px solid var(--neon-lime); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 20px; font-weight: 800; color: #fff; transition: border-color 0.3s ease;" id="profile-avatar-initials">
+          JV
+        </div>
+        <div>
+          <div style="font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text-white);" id="profile-user-name">João Victor</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <span class="tag-status tag-uso" id="profile-user-role">Administrador</span>
+            <span style="font-size: 11px; color: var(--text-muted);" id="profile-user-id">ID: 6103903943</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4;">
+        Status da Sessão: <span id="profile-session-status" style="color: var(--neon-lime); font-weight: 600; transition: color 0.3s ease;">● Conectado & Ativo</span><br>
+        <span id="profile-session-desc">Suas operações e agendamentos serão atribuídos a este perfil.</span>
+      </div>
+
+      <div class="modal-actions" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; gap: 10px; width: 100%;">
+          <button class="btn-action-secondary" style="flex: 1;" onclick="trocarParaModoLogin()">🔄 Trocar Usuário</button>
+          <button type="button" style="flex: 1; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 10px; border-radius: var(--radius-full); font-weight: 600; cursor: pointer;" onclick="executarLogout()">🚪 Sair da Conta</button>
+        </div>
+        <button class="btn-action-secondary" style="width: 100%;" onclick="fecharModalAuth()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhes do Experimento / Reserva -->
+  <div class="modal-backdrop" id="modal-detalhe-reserva">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-head">
+        <h3 id="detalhe-reserva-titulo">Detalhes da Reserva</h3>
+        <button class="btn-close-modal" onclick="fecharModalDetalheReserva()">&times;</button>
+      </div>
+      <div id="detalhe-reserva-conteudo"></div>
+      <div class="modal-actions" id="detalhe-reserva-actions"></div>
+    </div>
+  </div>
+
+
+  <!-- Modal: Novo Agendamento de Experimento -->
+  <div class="modal-backdrop" id="modal-agendamento">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>📅 Agendar Experimento</h3>
+        <button class="btn-close-modal" onclick="fecharModalAgendamento()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Equipamento / Recurso:</label>
+        <select id="modal-agend-item">
+          <option value="">Carregando itens...</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label>Início (Data e Hora):</label>
+          <input type="datetime-local" id="modal-agend-inicio">
+        </div>
+        <div class="form-group">
+          <label>Término (Data e Hora):</label>
+          <input type="datetime-local" id="modal-agend-fim">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action-secondary" onclick="fecharModalAgendamento()">Cancelar</button>
+        <button class="btn-action-lime" onclick="salvarAgendamento()">Confirmar Reserva</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Registrar Consumo / Baixa / Avaria -->
+  <div class="modal-backdrop" id="modal-log">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>📋 Registrar Consumo ou Avaria</h3>
+        <button class="btn-close-modal" onclick="fecharModalLog()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Item Utilizado:</label>
+        <select id="modal-log-item">
+          <option value="">Carregando itens...</option>
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label>Qtd. Consumida:</label>
+          <input type="number" id="modal-log-qtd" step="any" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Estado após o uso:</label>
+          <select id="modal-log-estado">
+            <option value="Bom">✅ Bom</option>
+            <option value="Quebrado">🚨 Quebrado / Avaria</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Observações / Relato:</label>
+        <input type="text" id="modal-log-obs" placeholder="Ex: Sobra descartada, ou vidraria trincou">
+      </div>
+
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="modal-log-repor" style="width: auto;">
+          <span>Sinalizar necessidade de reposição / compra</span>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action-secondary" onclick="fecharModalLog()">Cancelar</button>
+        <button class="btn-action-lime" onclick="salvarLogUso()">Registrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Reabastecer Item -->
+  <div class="modal-backdrop" id="modal-repor">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-repor-title">Reabastecer Item</h3>
+        <button class="btn-close-modal" onclick="fecharModalRepor()">&times;</button>
+      </div>
+      <input type="hidden" id="modal-repor-id">
+
+      <div class="form-group">
+        <label>Quantidade a Adicionar (<span id="modal-repor-un">un</span>):</label>
+        <input type="number" id="modal-repor-qtd" step="any" min="0.1" placeholder="Ex: 500">
+      </div>
+
+      <div class="form-group">
+        <label>Novo Lote (Opcional):</label>
+        <input type="text" id="modal-repor-lote" placeholder="Ex: LOT-2026-X">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action-secondary" onclick="fecharModalRepor()">Cancelar</button>
+        <button class="btn-action-lime" onclick="salvarReabastecimento()">Adicionar ao Estoque</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastrar Novo Item no Inventário -->
+  <div class="modal-backdrop" id="modal-novo-item">
+    <div class="modal-box" style="max-width: 540px;">
+      <div class="modal-head">
+        <h3>➕ Cadastrar Novo Item</h3>
+        <button class="btn-close-modal" onclick="fecharModalNovoItem()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Nome do Item / Reagente:</label>
+        <input type="text" id="novo-nome" placeholder="Ex: Acetona P.A., Micropipeta 10-100µL" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label>Categoria:</label>
+          <select id="novo-categoria">
+            <option value="reagente">Reagente</option>
+            <option value="equipamento">Equipamento</option>
+            <option value="vidraria">Vidraria</option>
+            <option value="limpeza">Limpeza</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Laboratório:</label>
+          <select id="novo-lab">
+            <option value="LAT">LAT</option>
+            <option value="POA">POA</option>
+            <option value="Croma">Croma</option>
+            <option value="Lanagua">Lanagua</option>
+            <option value="LabITech">LabITech</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label>Quantidade Inicial:</label>
+          <input type="number" id="novo-qtd" step="any" min="0" value="1">
+        </div>
+        <div class="form-group">
+          <label>Unidade de Medida:</label>
+          <input type="text" id="novo-unidade" placeholder="Ex: g, mL, un" value="un">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Bancada / Armário / Localização:</label>
+        <input type="text" id="novo-local" placeholder="Ex: Armário de Ácidos, Bancada 2">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action-secondary" onclick="fecharModalNovoItem()">Cancelar</button>
+        <button class="btn-action-lime" onclick="salvarNovoItem()">Salvar no Inventário</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-popup" id="toast-msg"></div>
+
+  <!-- Atalho Flutuante para o Chat IA -->
+  <button class="floating-chat-trigger" id="floating-chat-btn" onclick="trocarVisualizacao('chat')" title="Abrir Assistente Orion AI">
+    <div class="chat-sparkle-icon">✨</div>
+    <span class="chat-btn-label">Orion AI</span>
+    <div class="pulse-dot" id="floating-chat-pulse"></div>
+  </button>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- JAVASCRIPT: LÓGICA DE DADOS, CHAT IA E NAVEGAÇÃO                -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <script>
+    let usuarioLogado = null;
+    let dadosStats = {};
+    let listaItens = [];
+    let listaAgendamentos = [];
+    let listaReposicoes = [];
+    let listaLogs = [];
+    let listaProtocolos = { protocolos: [], pops: [] };
+    let historicoChat = [];
+    let conexaoServidorAtiva = true;
+
+    // Estados dos Gráficos e Calendário
+    let periodoGraficosAtual = "today";
+    let dataCalendarioAtual = new Date();
+    let diaSelecionadoCalendario = null;
+    let filtroAtividadeAtual = "all";
+
+    const MESES_PT = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    // ──────────────────────────────────────────────────────────────────
+    // Inicialização e Monitoramento Real de Conexão
+    // ──────────────────────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      inicializarUsuario();
+      carregarHistoricoChatLocal();
+      carregarDadosDashboard();
+      carregarGraficosAtividade("today");
+      renderizarCalendario();
+
+      // Monitoramento contínuo da integridade da conexão (Heartbeat a cada 4 segundos)
+      monitorarConexaoServidor();
+      setInterval(monitorarConexaoServidor, 4000);
+
+      window.addEventListener("online", monitorarConexaoServidor);
+      window.addEventListener("offline", () => definirStatusConexao(false, "Navegador em modo offline"));
+
+      setInterval(() => {
+        if (conexaoServidorAtiva) {
+          carregarDadosDashboard(true);
+          carregarGraficosAtividade(periodoGraficosAtual);
+        }
+      }, 25000);
+    });
+
+    function definirStatusConexao(estaOnline, motivo = "") {
+      const statusAnterior = conexaoServidorAtiva;
+      conexaoServidorAtiva = estaOnline;
+
+      const statusDot = document.getElementById("user-status-dot");
+      const avatarPill = document.getElementById("sidebar-user-avatar");
+      const avatarTooltip = document.getElementById("avatar-tooltip");
+      const profileStatus = document.getElementById("profile-session-status");
+      const profileDesc = document.getElementById("profile-session-desc");
+      const profileAvatar = document.getElementById("profile-avatar-initials");
+      const chatStatus = document.getElementById("chat-connection-status");
+      const floatPulse = document.getElementById("floating-chat-pulse");
+
+      const primeiroNome = usuarioLogado ? usuarioLogado.nome.trim().split(" ")[0] : "Visitante";
+
+      if (estaOnline) {
+        if (statusAnterior === false) {
+          showToast("🟢 Conexão restabelecida com o servidor!");
+          carregarDadosDashboard(true);
+        }
+
+        if (statusDot) {
+          statusDot.style.background = usuarioLogado ? "var(--neon-lime)" : "#64748b";
+          statusDot.style.boxShadow = usuarioLogado ? "0 0 8px var(--neon-lime-glow)" : "none";
+          statusDot.classList.remove("status-inactive-pulse");
+          statusDot.title = usuarioLogado ? "Servidor Conectado & Ativo" : "Visitante (Desconectado)";
+        }
+
+        if (profileAvatar) {
+          profileAvatar.style.borderColor = "var(--neon-lime)";
+        }
+
+        if (profileStatus) {
+          profileStatus.innerHTML = "● Conectado & Ativo";
+          profileStatus.style.color = "var(--neon-lime)";
+        }
+        if (profileDesc) {
+          profileDesc.innerHTML = "Suas operações e agendamentos serão atribuídos a este perfil.";
+          profileDesc.style.color = "var(--text-muted)";
+        }
+
+        if (avatarTooltip) {
+          avatarTooltip.textContent = usuarioLogado ? `${primeiroNome} (${usuarioLogado.nivel_acesso})` : "Identificar-se / Login";
+        }
+        if (avatarPill) {
+          avatarPill.title = usuarioLogado ? `${usuarioLogado.nome} — Conectado & Ativo` : "Identificar-se / Login";
+        }
+
+        if (chatStatus) {
+          chatStatus.innerHTML = "Online & Conectado à Base RAG do Laboratório";
+          chatStatus.classList.remove("status-offline-text");
+        }
+
+        if (floatPulse) {
+          floatPulse.style.background = "var(--neon-lime)";
+          floatPulse.style.boxShadow = "0 0 8px var(--neon-lime-glow)";
+        }
+      } else {
+        if (statusAnterior === true) {
+          showToast("🚨 Conexão perdida! O servidor está inativo no momento.");
+        }
+
+        if (statusDot) {
+          statusDot.style.background = "#ef4444";
+          statusDot.style.boxShadow = "0 0 10px rgba(239, 68, 68, 0.9)";
+          statusDot.classList.add("status-inactive-pulse");
+          statusDot.title = "Inativo — Sem conexão com o servidor";
+        }
+
+        if (profileAvatar) {
+          profileAvatar.style.borderColor = "#ef4444";
+        }
+
+        if (profileStatus) {
+          profileStatus.innerHTML = "● Inativo & Desconectado";
+          profileStatus.style.color = "#ef4444";
+        }
+        if (profileDesc) {
+          profileDesc.innerHTML = `<b style="color: #f87171;">⚠️ Aviso de Inatividade:</b> A conexão com o servidor caiu. Tentando reconectar...`;
+          profileDesc.style.color = "#f87171";
+        }
+
+        if (avatarTooltip) {
+          avatarTooltip.textContent = `${primeiroNome} — Inativo (Sem Conexão)`;
+        }
+        if (avatarPill) {
+          avatarPill.title = "Inativo — Conexão perdida com o servidor";
+        }
+
+        if (chatStatus) {
+          chatStatus.innerHTML = "Inativo • Sem conexão com o servidor (Tentando reconectar...)";
+          chatStatus.classList.add("status-offline-text");
+        }
+
+        if (floatPulse) {
+          floatPulse.style.background = "#ef4444";
+          floatPulse.style.boxShadow = "0 0 8px rgba(239, 68, 68, 0.8)";
+        }
+      }
+    }
+
+    async function monitorarConexaoServidor() {
+      if (!navigator.onLine) {
+        definirStatusConexao(false, "Navegador offline");
+        return;
+      }
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        const res = await fetch("/api/dashboard/health?t=" + Date.now(), {
+          method: "GET",
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.status === "online") {
+            definirStatusConexao(true);
+            return;
+          }
+        }
+        definirStatusConexao(false, "Código anormal");
+      } catch (err) {
+        definirStatusConexao(false, "Servidor inalcançável");
+      }
+    }
+
+    function inicializarUsuario() {
+      // 1. Telegram WebApp SDK
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe?.user) {
+        const u = window.Telegram.WebApp.user;
+        const nome = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username || "Pesquisador";
+        usuarioLogado = {
+          telegram_id: u.id,
+          nome: nome,
+          nivel_acesso: "Membro",
+          modo: "Telegram"
+        };
+        localStorage.setItem("orion_user_session", JSON.stringify(usuarioLogado));
+      } else {
+        // 2. LocalStorage
+        const salvo = localStorage.getItem("orion_user_session");
+        if (salvo) {
+          try {
+            usuarioLogado = JSON.parse(salvo);
+          } catch(e) {
+            localStorage.removeItem("orion_user_session");
+            usuarioLogado = null;
+          }
+        } else {
+          usuarioLogado = null;
+        }
+      }
+
+      atualizarCabecalhoUsuario();
+
+      // Primeiro acesso: Se o pesquisador não está logado, abre o modal de login automaticamente
+      if (!usuarioLogado) {
+        setTimeout(() => {
+          abrirModalAuth(true);
+        }, 400);
+      }
+    }
+
+    function atualizarCabecalhoUsuario() {
+      const greetH1 = document.getElementById("user-greeting");
+      const greetSub = document.getElementById("user-subgreeting");
+      const avatarTxt = document.getElementById("user-initials");
+
+      if (usuarioLogado) {
+        const primeiroNome = usuarioLogado.nome.trim().split(" ")[0];
+        if (greetH1) greetH1.textContent = `Olá, ${primeiroNome}!`;
+        if (greetSub) greetSub.textContent = "Pronto para os experimentos de hoje?";
+
+        const partes = usuarioLogado.nome.trim().split(/\s+/);
+        let iniciais = partes[0][0].toUpperCase();
+        if (partes.length > 1) {
+          iniciais += partes[partes.length - 1][0].toUpperCase();
+        } else if (partes[0].length > 1) {
+          iniciais = partes[0].substring(0, 2).toUpperCase();
+        }
+        if (avatarTxt) avatarTxt.textContent = iniciais;
+      } else {
+        if (greetH1) greetH1.textContent = "Olá, Visitante!";
+        if (greetSub) greetSub.textContent = "Identifique-se para gerenciar experimentos e estoques.";
+        if (avatarTxt) {
+          avatarTxt.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+        }
+      }
+
+      definirStatusConexao(conexaoServidorAtiva);
+    }
+
+    function verificarAutenticacao(acao = "esta operação") {
+      if (!usuarioLogado) {
+        showToast(`Identifique-se para ${acao}.`);
+        abrirModalAuth(true);
+        return false;
+      }
+      return true;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Navegação entre Telas / Abas do Sistema
+    // ──────────────────────────────────────────────────────────────────
+    function trocarVisualizacao(aba) {
+      if (!aba) aba = "overview";
+
+      // 1. Ocultar todas as seções e remover status ativo
+      const views = document.querySelectorAll(".tab-section-view");
+      views.forEach(v => v.classList.remove("active"));
+
+      // 2. Desmarcar todos os botões da barra lateral de navegação
+      const navBtns = document.querySelectorAll(".nav-btn");
+      navBtns.forEach(btn => btn.classList.remove("active"));
+
+      // 3. Ativar a seção solicitada
+      const viewAlvo = document.getElementById(`view-${aba}`);
+      if (viewAlvo) {
+        viewAlvo.classList.add("active");
+      } else {
+        const viewPadrao = document.getElementById("view-overview");
+        if (viewPadrao) viewPadrao.classList.add("active");
+      }
+
+      // 4. Ativar o botão correspondente no dock lateral
+      const navAlvo = document.getElementById(`nav-${aba}`);
+      if (navAlvo) {
+        navAlvo.classList.add("active");
+      }
+
+      // 5. Atualizar/recarregar dados específicos da tela aberta
+      if (aba === "chat") {
+        setTimeout(() => {
+          const inp = document.getElementById("chat-input-box");
+          if (inp) inp.focus();
+          scrollChatParaFinal();
+        }, 80);
+      } else if (aba === "inventario") {
+        carregarItensInventario();
+      } else if (aba === "reposicoes") {
+        carregarTabelaReposicoes();
+      } else if (aba === "agendamentos") {
+        carregarTabelaAgendamentos();
+      } else if (aba === "logs") {
+        carregarTabelaLogs();
+      } else if (aba === "protocolos") {
+        carregarGridProtocolos();
+      } else if (aba === "overview") {
+        carregarGraficosAtividade(periodoGraficosAtual);
+        renderizarCalendario();
+        atualizarCardsAtividades();
+      }
+
+      // 6. Rolar o conteúdo principal suavemente para o topo
+      const mainEl = document.querySelector("main.app-main");
+      if (mainEl) mainEl.scrollTop = 0;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // 7. Atualizar atalho flutuante do chat (ocultar quando estiver na tela do chat)
+      const fab = document.getElementById("floating-chat-btn");
+      if (fab) {
+        fab.style.display = (aba === "chat") ? "none" : "flex";
+      }
+    }
+    window.trocarVisualizacao = trocarVisualizacao;
+
+    function scrollChatParaFinal() {
+      const container = document.getElementById("chat-messages-list");
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+    window.scrollChatParaFinal = scrollChatParaFinal;
+
+    // ──────────────────────────────────────────────────────────────────
+    // Carregamento de Dados das APIs REST
+    // ──────────────────────────────────────────────────────────────────
+    async function carregarDadosDashboard(silencioso = false) {
+      try {
+        const [resStats, resItens, resAgend, resRepo, resLogs, resProt] = await Promise.all([
+          fetch("/api/dashboard/stats").then(r => r.json()),
+          fetch("/api/dashboard/itens").then(r => r.json()),
+          fetch("/api/dashboard/agendamentos").then(r => r.json()),
+          fetch("/api/dashboard/reposicoes").then(r => r.json()),
+          fetch("/api/dashboard/logs?limite=30").then(r => r.json()),
+          fetch("/api/dashboard/protocolos").then(r => r.json()),
+        ]);
+
+        dadosStats = resStats || {};
+        listaItens = resItens || [];
+        listaAgendamentos = resAgend || [];
+        listaReposicoes = resRepo || [];
+        listaLogs = resLogs || [];
+        listaProtocolos = resProt || { protocolos: [], pops: [] };
+
+        atualizarWidgetsVisaoGeral();
+        popularTabelasSecundarias();
+        popularSelectsModais();
+
+        if (!silencioso) {
+          console.log("Dados do laboratório carregados com sucesso.");
+        }
+      } catch (err) {
+        console.warn("Aviso ao carregar dados:", err);
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Renderização dos Blocos Resumo (Página Principal)
+    // ──────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────
+    // 2. Gráficos de Telemetria Dinâmicos (Painel SCADA / Industrial IoT)
+    // ──────────────────────────────────────────────────────────────────
+    let dadosGraficosAtuais = null;
+    let modoGraficoAtual = "curve"; // "curve" ou "bars"
+    let serieFocada = "all";
+
+    async function carregarGraficosAtividade(periodo = "today") {
+      periodoGraficosAtual = periodo;
+      try {
+        const res = await fetch(`/api/dashboard/graficos?periodo=${periodo}`);
+        if (!res.ok) return;
+        const dados = await res.json();
+        dadosGraficosAtuais = dados;
+        renderizarGraficosAtividade(dados);
+      } catch(e) {
+        console.warn("Aviso ao buscar telemetria de gráficos:", e);
+      }
+    }
+
+    function alterarPeriodoAtividade(periodo) {
+      const periodoTexto = periodo === 'today' ? 'Hoje' : (periodo === 'week' ? 'Esta Semana' : 'Este Mês');
+      showToast(`Carregando telemetria: ${periodoTexto}`);
+      carregarGraficosAtividade(periodo);
+    }
+
+    function alternarModoGrafico(modo) {
+      modoGraficoAtual = modo;
+      const btnCurve = document.getElementById("btn-chart-mode-curve");
+      const btnBars = document.getElementById("btn-chart-mode-bars");
+      const grpCurves = document.getElementById("chart-mode-curves-group");
+      const grpBars = document.getElementById("chart-mode-bars-group");
+
+      if (btnCurve && btnBars) {
+        if (modo === "curve") {
+          btnCurve.classList.add("active");
+          btnBars.classList.remove("active");
+          if (grpCurves) grpCurves.style.display = "block";
+          if (grpBars) grpBars.style.display = "none";
+        } else {
+          btnBars.classList.add("active");
+          btnCurve.classList.remove("active");
+          if (grpCurves) grpCurves.style.display = "none";
+          if (grpBars) grpBars.style.display = "block";
+        }
+      }
+
+      if (dadosGraficosAtuais) {
+        renderizarGraficosAtividade(dadosGraficosAtuais);
+      }
+    }
+
+    function focarSerieGrafico(serie) {
+      if (serieFocada === serie) {
+        serieFocada = "all";
+      } else {
+        serieFocada = serie;
+      }
+
+      const legCons = document.getElementById("legend-consumo");
+      const legPlan = document.getElementById("legend-planejado");
+      const legOcup = document.getElementById("legend-ocupacao");
+
+      const lineCons = document.getElementById("chart-line-consumo");
+      const areaCons = document.getElementById("chart-area-consumo");
+      const linePlan = document.getElementById("chart-line-planejado");
+      const areaPlan = document.getElementById("chart-area-planejado");
+      const lineOcup = document.getElementById("chart-line-ocupacao");
+
+      [legCons, legPlan, legOcup].forEach(el => el && el.classList.remove("dimmed"));
+
+      if (serieFocada === "consumo") {
+        if (legPlan) legPlan.classList.add("dimmed");
+        if (legOcup) legOcup.classList.add("dimmed");
+        if (lineCons) lineCons.style.opacity = "1";
+        if (areaCons) areaCons.style.opacity = "1";
+        if (linePlan) linePlan.style.opacity = "0.2";
+        if (areaPlan) areaPlan.style.opacity = "0.05";
+        if (lineOcup) lineOcup.style.opacity = "0.2";
+      } else if (serieFocada === "planejado") {
+        if (legCons) legCons.classList.add("dimmed");
+        if (legOcup) legOcup.classList.add("dimmed");
+        if (linePlan) linePlan.style.opacity = "1";
+        if (areaPlan) areaPlan.style.opacity = "1";
+        if (lineCons) lineCons.style.opacity = "0.2";
+        if (areaCons) areaCons.style.opacity = "0.05";
+        if (lineOcup) lineOcup.style.opacity = "0.2";
+      } else if (serieFocada === "ocupacao") {
+        if (legCons) legCons.classList.add("dimmed");
+        if (legPlan) legPlan.classList.add("dimmed");
+        if (lineOcup) lineOcup.style.opacity = "1";
+        if (lineCons) lineCons.style.opacity = "0.2";
+        if (areaCons) areaCons.style.opacity = "0.05";
+        if (linePlan) linePlan.style.opacity = "0.2";
+        if (areaPlan) areaPlan.style.opacity = "0.05";
+      } else {
+        if (lineCons) lineCons.style.opacity = "1";
+        if (areaCons) areaCons.style.opacity = "1";
+        if (linePlan) linePlan.style.opacity = "1";
+        if (areaPlan) areaPlan.style.opacity = "1";
+        if (lineOcup) lineOcup.style.opacity = "1";
+      }
+    }
+
+    function destacarMetricaGrafico(tipo) {
+      if (tipo === "consumo") focarSerieGrafico("consumo");
+      else if (tipo === "horas") focarSerieGrafico("ocupacao");
+      else if (tipo === "usos") focarSerieGrafico("all");
+    }
+
+    function removerDestaqueMetrica() {
+      focarSerieGrafico("all");
+    }
+
+    function calcularCaminhoCurva(pontos, maxVal, largura = 500, alturaUtil = 62, baseY = 72, minX = 15, maxX = 485) {
+      if (!pontos || pontos.length === 0) return { lineD: "", areaD: "", pts: [] };
+
+      const spanX = maxX - minX;
+      const pts = pontos.map((v, i) => {
+        const x = minX + (i / (pontos.length - 1)) * spanX;
+        const ratio = Math.max(0, Math.min(1, v / (maxVal || 1)));
+        const y = baseY - ratio * alturaUtil;
+        return { x, y, v };
+      });
+
+      let lineD = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        lineD += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+      }
+
+      const lastPt = pts[pts.length - 1];
+      const firstPt = pts[0];
+      const areaD = `${lineD} L ${lastPt.x.toFixed(1)},${baseY} L ${firstPt.x.toFixed(1)},${baseY} Z`;
+
+      return { lineD, areaD, pts };
+    }
+
+    function renderizarGraficosAtividade(dados) {
+      if (!dados) return;
+
+      // 1. Atualiza Escala do Eixo Y
+      if (dados.escala_y && dados.escala_y.ticks) {
+        const ticks = dados.escala_y.ticks;
+        const y4 = document.getElementById("y-tick-4");
+        const y3 = document.getElementById("y-tick-3");
+        const y2 = document.getElementById("y-tick-2");
+        const y1 = document.getElementById("y-tick-1");
+        if (y4) y4.textContent = ticks[0] !== undefined ? ticks[0] : "120";
+        if (y3) y3.textContent = ticks[1] !== undefined ? ticks[1] : "80";
+        if (y2) y2.textContent = ticks[2] !== undefined ? ticks[2] : "40";
+        if (y1) y1.textContent = ticks[4] !== undefined ? ticks[4] : "0";
+      }
+
+      // 2. Atualiza Eixo X (Timestamps formatados)
+      const xAxisEl = document.getElementById("telemetry-x-axis");
+      if (xAxisEl && dados.rotulos) {
+        xAxisEl.innerHTML = dados.rotulos.map(r => `<span>${r}</span>`).join("");
+      }
+
+      // 3. Atualiza Indicador de Pico no Cabeçalho
+      const peakValEl = document.getElementById("peak-badge-val");
+      if (peakValEl && dados.telemetria) {
+        peakValEl.textContent = `${dados.telemetria.pico_horario || '16:00'} (${dados.telemetria.pico_valor || 94} g/mL)`;
+      }
+
+      const maxVal = (dados.escala_y && dados.escala_y.max) ? dados.escala_y.max : 100;
+
+      // 4. Modo Curvas: Linhas e Áreas Preenchidas
+      if (dados.curva_vol_consumido && dados.curva_vol_planejado) {
+        const cCons = calcularCaminhoCurva(dados.curva_vol_consumido, maxVal);
+        const cPlan = calcularCaminhoCurva(dados.curva_vol_planejado, maxVal);
+
+        const maxHoras = Math.max(...dados.curva_horas_bancada, 5);
+        const cHoras = calcularCaminhoCurva(dados.curva_horas_bancada, maxHoras);
+
+        const pathAreaCons = document.getElementById("chart-area-consumo");
+        const pathLineCons = document.getElementById("chart-line-consumo");
+        const pathAreaPlan = document.getElementById("chart-area-planejado");
+        const pathLinePlan = document.getElementById("chart-line-planejado");
+        const pathLineOcup = document.getElementById("chart-line-ocupacao");
+
+        if (pathAreaCons) pathAreaCons.setAttribute("d", cCons.areaD);
+        if (pathLineCons) pathLineCons.setAttribute("d", cCons.lineD);
+        if (pathAreaPlan) pathAreaPlan.setAttribute("d", cPlan.areaD);
+        if (pathLinePlan) pathLinePlan.setAttribute("d", cPlan.lineD);
+        if (pathLineOcup) pathLineOcup.setAttribute("d", cHoras.lineD);
+      }
+
+      // 5. Modo Barras: Renderiza Barras Verticais Neon (como na referência)
+      const barsGroup = document.getElementById("chart-mode-bars-group");
+      if (barsGroup && dados.barras_distribuicao) {
+        const n = dados.barras_distribuicao.length;
+        const minX = 15;
+        const maxX = 485;
+        const spanX = maxX - minX;
+        const barWidth = Math.min(22, Math.max(12, Math.floor(spanX / (n * 1.6))));
+
+        let svgBarsHtml = "";
+        dados.barras_distribuicao.forEach((b, i) => {
+          const centerX = minX + (i / (n - 1)) * spanX;
+          const x = centerX - barWidth / 2;
+          const hRatio = Math.max(0.04, Math.min(1, b.consumo / maxVal));
+          const h = hRatio * 62;
+          const y = 72 - h;
+
+          svgBarsHtml += `
+            <g class="telemetry-bar-group" data-index="${i}">
+              <rect class="telemetry-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth}" height="${h.toFixed(1)}" rx="3" fill="url(#grad-neon-bar)" />
+              <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth}" height="2.5" rx="1.2" fill="#67e8f9" filter="url(#glow-cyan)" />
+            </g>
+          `;
+        });
+        barsGroup.innerHTML = svgBarsHtml;
+      }
+
+      // 6. Atualiza Totais Reais nos Cartões Inferiores
+      if (dados.totais) {
+        const valSteps = document.getElementById("val-steps");
+        const valCal = document.getElementById("val-calories");
+        const valAct = document.getElementById("val-act-time");
+        if (valSteps) valSteps.textContent = dados.totais.consumos_usos;
+        if (valCal) valCal.textContent = dados.totais.volume_reagentes;
+        if (valAct) valAct.textContent = dados.totais.tempo_bancada;
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Interatividade: Crosshair, HUD Tooltip & Rastreamento do Mouse
+    // ──────────────────────────────────────────────────────────────────
+    function aoMoverMouseGrafico(event) {
+      if (!dadosGraficosAtuais || !dadosGraficosAtuais.rotulos) return;
+
+      const wrap = document.getElementById("telemetry-svg-wrap");
+      const tooltip = document.getElementById("chart-hud-tooltip");
+      const crosshairGroup = document.getElementById("chart-crosshair-group");
+      const crossLine = document.getElementById("chart-crosshair-line");
+      const ptCons = document.getElementById("chart-point-cons");
+      const ptPlan = document.getElementById("chart-point-plan");
+      const ptHoras = document.getElementById("chart-point-horas");
+
+      if (!wrap || !tooltip || !crosshairGroup) return;
+
+      const rect = wrap.getBoundingClientRect();
+      const relX = event.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, relX / rect.width));
+
+      const n = dadosGraficosAtuais.rotulos.length;
+      const idx = Math.min(n - 1, Math.max(0, Math.round(pct * (n - 1))));
+
+      // Coordenadas exatas no SVG viewBox 0 0 500 78
+      const xSvg = 15 + (idx / (n - 1)) * 470;
+      const maxVal = (dadosGraficosAtuais.escala_y && dadosGraficosAtuais.escala_y.max) ? dadosGraficosAtuais.escala_y.max : 100;
+
+      const valCons = dadosGraficosAtuais.curva_vol_consumido ? dadosGraficosAtuais.curva_vol_consumido[idx] : 0;
+      const valPlan = dadosGraficosAtuais.curva_vol_planejado ? dadosGraficosAtuais.curva_vol_planejado[idx] : 0;
+      const valHoras = dadosGraficosAtuais.curva_horas_bancada ? dadosGraficosAtuais.curva_horas_bancada[idx] : 0;
+      const valUsos = dadosGraficosAtuais.curva_usos ? dadosGraficosAtuais.curva_usos[idx] : 0;
+
+      const yCons = 72 - Math.min(1, valCons / maxVal) * 62;
+      const yPlan = 72 - Math.min(1, valPlan / maxVal) * 62;
+      const maxHoras = Math.max(...dadosGraficosAtuais.curva_horas_bancada, 5);
+      const yHoras = 72 - Math.min(1, valHoras / maxHoras) * 62;
+
+      // Move a linha guia do crosshair
+      if (crossLine) {
+        crossLine.setAttribute("x1", xSvg.toFixed(1));
+        crossLine.setAttribute("x2", xSvg.toFixed(1));
+      }
+
+      // Move os pontos de impacto nas curvas
+      if (ptCons) {
+        ptCons.setAttribute("cx", xSvg.toFixed(1));
+        ptCons.setAttribute("cy", yCons.toFixed(1));
+      }
+      if (ptPlan) {
+        ptPlan.setAttribute("cx", xSvg.toFixed(1));
+        ptPlan.setAttribute("cy", yPlan.toFixed(1));
+      }
+      if (ptHoras) {
+        ptHoras.setAttribute("cx", xSvg.toFixed(1));
+        ptHoras.setAttribute("cy", yHoras.toFixed(1));
+      }
+
+      crosshairGroup.style.opacity = "1";
+
+      // Atualiza o conteúdo do HUD Tooltip
+      const timeValEl = document.getElementById("hud-time-val");
+      const hudCons = document.getElementById("hud-val-cons");
+      const hudPlan = document.getElementById("hud-val-plan");
+      const hudHoras = document.getElementById("hud-val-horas");
+      const hudUsos = document.getElementById("hud-val-usos");
+
+      if (timeValEl) timeValEl.textContent = `${dadosGraficosAtuais.rotulos[idx]}`;
+      if (hudCons) hudCons.textContent = `${valCons} g/mL`;
+      if (hudPlan) hudPlan.textContent = `${valPlan} g/mL`;
+      if (hudHoras) hudHoras.textContent = `${valHoras} h`;
+      if (hudUsos) hudUsos.textContent = `${valUsos} usos`;
+
+      // Posiciona o HUD Tooltip com contenção de borda para não vazar
+      const clampedX = Math.max(75, Math.min(rect.width - 75, relX));
+      tooltip.style.left = `${clampedX}px`;
+      tooltip.style.top = `6px`;
+      tooltip.style.display = "block";
+      tooltip.style.opacity = "1";
+    }
+
+    function aoSairMouseGrafico() {
+      const crosshairGroup = document.getElementById("chart-crosshair-group");
+      const tooltip = document.getElementById("chart-hud-tooltip");
+      if (crosshairGroup) crosshairGroup.style.opacity = "0";
+      if (tooltip) {
+        tooltip.style.opacity = "0";
+        setTimeout(() => {
+          if (tooltip.style.opacity === "0") tooltip.style.display = "none";
+        }, 150);
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 3. Calendário Interativo Real (Card Azul Royal)
+    // ──────────────────────────────────────────────────────────────────
+    function navegarMesCalendario(delta) {
+      dataCalendarioAtual.setMonth(dataCalendarioAtual.getMonth() + delta);
+      renderizarCalendario();
+    }
+
+    function renderizarCalendario() {
+      const grid = document.getElementById("calendar-days-grid");
+      const titleEl = document.getElementById("calendar-month-title");
+      if (!grid) return;
+
+      const ano = dataCalendarioAtual.getFullYear();
+      const mes = dataCalendarioAtual.getMonth();
+
+      if (titleEl) {
+        titleEl.textContent = `${MESES_PT[mes]} ${ano}`;
+      }
+
+      const hoje = new Date();
+      const isMesAtual = (hoje.getFullYear() === ano && hoje.getMonth() === mes);
+      const diaHoje = hoje.getDate();
+
+      const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+      const offsetSegunda = (primeiroDiaSemana === 0 ? 6 : primeiroDiaSemana - 1);
+
+      const totalDiasMes = new Date(ano, mes + 1, 0).getDate();
+      const totalDiasMesAnt = new Date(ano, mes, 0).getDate();
+
+      // Mapeia dias com reservas reais no mês atual
+      const diasComReserva = new Set();
+      listaAgendamentos.forEach(r => {
+        if (r.data_inicio_iso) {
+          const dRes = new Date(r.data_inicio_iso);
+          if (dRes.getFullYear() === ano && dRes.getMonth() === mes) {
+            diasComReserva.add(dRes.getDate());
+          }
+        }
+      });
+
+      let html = "";
+
+      // Dias anteriores
+      for (let i = offsetSegunda - 1; i >= 0; i--) {
+        const diaAnt = totalDiasMesAnt - i;
+        html += `<div class="cal-day dashed" title="Mês anterior">${diaAnt}</div>`;
+      }
+
+      // Dias do mês
+      for (let d = 1; d <= totalDiasMes; d++) {
+        let classes = ["cal-day"];
+        if (isMesAtual && d === diaHoje) classes.push("is-today");
+        if (diasComReserva.has(d)) classes.push("has-event");
+        if (diaSelecionadoCalendario === d) classes.push("active-highlight");
+
+        html += `
+          <div class="${classes.join(" ")}" onclick="selecionarDiaCalendario(${d})" title="${diasComReserva.has(d) ? 'Possui experimentos agendados' : 'Disponível'}">
+            ${d}
+          </div>
+        `;
+      }
+
+      const celulasTotais = offsetSegunda + totalDiasMes;
+      const celulasRestantes = (7 - (celulasTotais % 7)) % 7;
+      for (let i = 1; i <= celulasRestantes; i++) {
+        html += `<div class="cal-day dashed" title="Próximo mês">${i}</div>`;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function selecionarDiaCalendario(dia) {
+      diaSelecionadoCalendario = (diaSelecionadoCalendario === dia ? null : dia);
+      renderizarCalendario();
+
+      if (diaSelecionadoCalendario) {
+        showToast(`Filtrando experimentos para o dia ${dia} de ${MESES_PT[dataCalendarioAtual.getMonth()]}`);
+      } else {
+        showToast("Exibindo todos os experimentos agendados.");
+      }
+      atualizarCardsAtividades();
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 4. Meus Experimentos & Filtros (Todos, Individuais, Em Equipe)
+    // ──────────────────────────────────────────────────────────────────
+    function filtrarCardsAtividade(tipo, btn) {
+      filtroAtividadeAtual = tipo;
+      document.querySelectorAll(".pill-filter-btn").forEach(b => b.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      atualizarCardsAtividades();
+    }
+
+    function atualizarCardsAtividades() {
+      const container = document.getElementById("activity-cards-container");
+      const countBadge = document.getElementById("activities-count-badge");
+      if (!container) return;
+
+      let reservas = [...listaAgendamentos];
+
+      // Filtro por dia do calendário
+      if (diaSelecionadoCalendario !== null) {
+        const ano = dataCalendarioAtual.getFullYear();
+        const mes = dataCalendarioAtual.getMonth();
+        reservas = reservas.filter(r => {
+          if (!r.data_inicio_iso) return false;
+          const d = new Date(r.data_inicio_iso);
+          return d.getFullYear() === ano && d.getMonth() === mes && d.getDate() === diaSelecionadoCalendario;
+        });
+      }
+
+      // Filtro de Pílula
+      if (filtroAtividadeAtual === "alone") {
+        if (!usuarioLogado) {
+          if (countBadge) countBadge.textContent = "Identifique-se para ver suas reservas";
+          container.innerHTML = `
+            <div style="grid-column: 1 / -1; background: var(--bg-card-sub); border: 1.5px dashed rgba(59, 130, 246, 0.4); border-radius: var(--radius-lg); padding: 22px; text-align: center;">
+              <p style="color: var(--text-white); font-weight: 600; font-size: 13.5px; margin-bottom: 6px;">Você não está conectado</p>
+              <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">Identifique-se para visualizar seus agendamentos individuais e horas de bancada.</p>
+              <button class="btn-action-lime" onclick="abrirModalAuth(true)">Conectar Agora ➔</button>
+            </div>
+          `;
+          return;
+        }
+        reservas = reservas.filter(r => r.usuario_id == usuarioLogado.telegram_id);
+      } else if (filtroAtividadeAtual === "friends") {
+        if (usuarioLogado) {
+          reservas = reservas.filter(r => r.usuario_id != usuarioLogado.telegram_id);
+        }
+      }
+
+      if (countBadge) {
+        countBadge.textContent = `${reservas.length} atividade${reservas.length === 1 ? '' : 's'} planejada${reservas.length === 1 ? '' : 's'}`;
+      }
+
+      let html = "";
+      const exibidas = reservas.slice(0, 3);
+
+      if (exibidas.length > 0) {
+        exibidas.forEach((r, idx) => {
+          const isHighlight = (idx === 0);
+          const horaInicio = r.data_inicio ? (r.data_inicio.split(" às ")[1] || "09:00") : "09:00";
+          const inicial = r.usuario_nome ? r.usuario_nome.trim()[0].toUpperCase() : "P";
+          html += `
+            <div class="activity-item-card ${isHighlight ? 'highlight-blue' : ''}" onclick="abrirDetalheReserva('${r.reserva_id}')" title="Clique para ver detalhes e concluir">
+              <div class="act-top-row">
+                <div class="avatar-stack">
+                  <div class="mini-avatar">🔬</div>
+                  <div class="mini-avatar">${inicial}</div>
+                </div>
+                <span class="arrow-icon-top">↗</span>
+              </div>
+              <div>
+                <div class="act-title">${r.item_nome || "Experimento"}</div>
+                <div class="act-time">${horaInicio} • ${r.laboratorio}</div>
+              </div>
+            </div>
+          `;
+        });
+      } else {
+        html += `
+          <div style="grid-column: 1 / span 3; background: var(--bg-card-sub); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px 10px; text-align: center; color: var(--text-muted); font-size: 11.5px; display: flex; align-items: center; justify-content: center;">
+            Nenhum experimento encontrado para os filtros selecionados.
+          </div>
+        `;
+      }
+
+      // Card Tracejado "+ Novo Experimento"
+      html += `
+        <div class="activity-item-card dashed-add" onclick="abrirModalNovoAgendamento()">
+          <div class="plus-icon">+</div>
+          <span class="lbl">Novo Experimento</span>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function atualizarWidgetsVisaoGeral() {
+      const totalItens = dadosStats.total_itens || 0;
+
+      // 3A. Disponibilidade de Equipamentos (Radial Gauge Real)
+      const totalEquip = dadosStats.equipamentos || 1;
+      const equipManut = dadosStats.itens_manutencao || 0;
+      const equipDisp = Math.max(0, totalEquip - equipManut);
+      const pctDisp = Math.round((equipDisp / Math.max(1, totalEquip)) * 100);
+
+      document.getElementById("radial-center-val").textContent = `${pctDisp}%`;
+      const arcEl = document.getElementById("radial-progress-arc");
+      if (arcEl) {
+        arcEl.setAttribute("stroke-dasharray", `${Math.min(100, Math.max(5, pctDisp))}, 100`);
+      }
+
+      // 3B. Saúde do Estoque Geral (Barra Linear Real)
+      const repoPend = dadosStats.reposicoes_pendentes || 0;
+      const pctEstoque = Math.max(10, Math.min(100, Math.round(((totalItens - repoPend) / Math.max(1, totalItens)) * 100)));
+      document.getElementById("progress-pct-val").textContent = `${pctEstoque}% abastecido`;
+      document.getElementById("progress-fill-bar").style.width = `${pctEstoque}%`;
+      document.getElementById("progress-min-lbl").textContent = `Crítico: ${repoPend} itens`;
+      document.getElementById("progress-max-lbl").textContent = `Ideal: ${totalItens} itens`;
+
+      atualizarCardsAtividades();
+    }
+
+
+    // ──────────────────────────────────────────────────────────────────
+    // Lógica do Chat IA (Página Separada com Histórico Adequado)
+    // ──────────────────────────────────────────────────────────────────
+    function carregarHistoricoChatLocal() {
+      const salvo = localStorage.getItem("orion_chat_history");
+      if (salvo) {
+        try {
+          historicoChat = JSON.parse(salvo);
+          renderizarHistoricoChat();
+        } catch(e) {
+          historicoChat = [];
+        }
+      }
+    }
+
+    function salvarHistoricoChatLocal() {
+      localStorage.setItem("orion_chat_history", JSON.stringify(historicoChat));
+    }
+
+    function escapeHTML(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatarInlineMarkdown(str) {
+      if (!str) return "";
+      return str
+        .replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/_([^_]+)_/g, '<em>$1</em>');
+    }
+
+    function formatarMensagemHTML(texto) {
+      if (!texto) return "";
+      let raw = String(texto).replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n');
+
+      // 1. Extrair blocos de código (```lang ... ```)
+      const codeBlocks = [];
+      raw = raw.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push(`<pre class="chat-code-block"><code>${escapeHTML(code.trim())}</code></pre>`);
+        return `\n%%CODEBLOCK_${idx}%%\n`;
+      });
+
+      // 2. Extrair tabelas markdown
+      const tableBlocks = [];
+      raw = raw.replace(/(?:^|\n)((?:\|[^\n]+\|\r?\n?)+)(?=\n|$)/g, (match, tableContent) => {
+        const lines = tableContent.trim().split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length >= 2 && lines.some(l => /^\|[\s-:]+(\|[\s-:]+)+\|$/.test(l))) {
+          let thead = '';
+          let tbody = '';
+          let isHeader = true;
+          lines.forEach(l => {
+            if (/^\|[\s-:]+(\|[\s-:]+)+\|$/.test(l)) {
+              isHeader = false;
+              return;
+            }
+            const cells = l.split('|').slice(1, -1).map(c => c.trim());
+            if (isHeader) {
+              thead += `<tr>${cells.map(c => `<th>${formatarInlineMarkdown(c)}</th>`).join('')}</tr>`;
+            } else {
+              tbody += `<tr>${cells.map(c => `<td>${formatarInlineMarkdown(c)}</td>`).join('')}</tr>`;
+            }
+          });
+          const tableHTML = `<div class="chat-table-wrap"><table class="chat-table">${thead ? '<thead>' + thead + '</thead>' : ''}<tbody>${tbody}</tbody></table></div>`;
+          const idx = tableBlocks.length;
+          tableBlocks.push(tableHTML);
+          return `\n%%TABLE_${idx}%%\n`;
+        }
+        return match;
+      });
+
+      // 3. Processar linhas
+      const lines = raw.split('\n');
+      let resultHTML = [];
+      let inUl = false;
+      let inOl = false;
+
+      function closeLists() {
+        if (inUl) { resultHTML.push('</ul>'); inUl = false; }
+        if (inOl) { resultHTML.push('</ol>'); inOl = false; }
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          closeLists();
+          continue;
+        }
+
+        // Checar placeholder de código ou tabela
+        if (trimmed.startsWith('%%CODEBLOCK_') && trimmed.endsWith('%%')) {
+          closeLists();
+          const idx = parseInt(trimmed.replace('%%CODEBLOCK_', '').replace('%%', ''), 10);
+          resultHTML.push(codeBlocks[idx] || '');
+          continue;
+        }
+        if (trimmed.startsWith('%%TABLE_') && trimmed.endsWith('%%')) {
+          closeLists();
+          const idx = parseInt(trimmed.replace('%%TABLE_', '').replace('%%', ''), 10);
+          resultHTML.push(tableBlocks[idx] || '');
+          continue;
+        }
+
+        // Divisores horizontais: ---, ***, ___
+        if (/^[-*_]{3,}$/.test(trimmed)) {
+          closeLists();
+          resultHTML.push('<hr class="chat-hr">');
+          continue;
+        }
+
+        // Headings
+        if (/^####\s+(.+)$/.test(trimmed)) {
+          closeLists();
+          const title = trimmed.replace(/^####\s+/, '');
+          resultHTML.push(`<h5 class="chat-h5">${formatarInlineMarkdown(title)}</h5>`);
+          continue;
+        }
+        if (/^###\s+(.+)$/.test(trimmed)) {
+          closeLists();
+          const title = trimmed.replace(/^###\s+/, '');
+          resultHTML.push(`<h4 class="chat-h4">${formatarInlineMarkdown(title)}</h4>`);
+          continue;
+        }
+        if (/^##\s+(.+)$/.test(trimmed)) {
+          closeLists();
+          const title = trimmed.replace(/^##\s+/, '');
+          resultHTML.push(`<h3 class="chat-h3">${formatarInlineMarkdown(title)}</h3>`);
+          continue;
+        }
+        if (/^#\s+(.+)$/.test(trimmed)) {
+          closeLists();
+          const title = trimmed.replace(/^#\s+/, '');
+          resultHTML.push(`<h3 class="chat-h3">${formatarInlineMarkdown(title)}</h3>`);
+          continue;
+        }
+
+        // Blockquotes
+        if (/^>\s*(.*)$/.test(trimmed)) {
+          closeLists();
+          const quote = trimmed.replace(/^>\s*/, '');
+          resultHTML.push(`<blockquote class="chat-quote">${formatarInlineMarkdown(quote)}</blockquote>`);
+          continue;
+        }
+
+        // Listas ordenadas (1. 2. etc.)
+        const matchOl = trimmed.match(/^(\d+)\.\s+(.+)$/);
+        if (matchOl) {
+          if (inUl) { resultHTML.push('</ul>'); inUl = false; }
+          if (!inOl) { resultHTML.push('<ol class="chat-ol">'); inOl = true; }
+          resultHTML.push(`<li>${formatarInlineMarkdown(matchOl[2])}</li>`);
+          continue;
+        }
+
+        // Listas não ordenadas (- ou * ou +)
+        const matchUl = trimmed.match(/^[-*+]\s+(.+)$/);
+        if (matchUl) {
+          if (inOl) { resultHTML.push('</ol>'); inOl = false; }
+          if (!inUl) { resultHTML.push('<ul class="chat-ul">'); inUl = true; }
+          resultHTML.push(`<li>${formatarInlineMarkdown(matchUl[1])}</li>`);
+          continue;
+        }
+
+        // Linha normal de texto / parágrafo
+        closeLists();
+        resultHTML.push(`<p class="chat-p">${formatarInlineMarkdown(trimmed)}</p>`);
+      }
+
+      closeLists();
+      return resultHTML.join('\n');
+    }
+
+    function renderizarHistoricoChat() {
+      const container = document.getElementById("chat-messages-list");
+      if (!container) return;
+
+      let html = `
+        <div class="chat-bubble bot">
+          <p class="chat-p">👋 <strong>Olá! Sou o Orion</strong>, inteligência artificial integrada ao laboratório.</p>
+          <p class="chat-p">Posso te ajudar a <strong>consultar procedimentos (POPs)</strong>, sugerir etapas experimentais, verificar estoque de reagentes e indicar o tempo necessário para cada análise.</p>
+          <div class="chat-bubble-time">Sistema</div>
+        </div>
+      `;
+
+      historicoChat.forEach(m => {
+        const cls = m.remetente === "user" ? "user" : "bot";
+        const corpoFormatado = (m.remetente === "user") ? `<p class="chat-p">${escapeHTML(m.texto)}</p>` : formatarMensagemHTML(m.texto);
+        html += `
+          <div class="chat-bubble ${cls}">
+            ${corpoFormatado}
+            <div class="chat-bubble-time">${m.hora}</div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      container.scrollTop = container.scrollHeight;
+
+      // Uma vez iniciada a conversa (com mensagens trocadas), as sugestões devem sumir
+      const chipsEl = document.getElementById("chat-quick-chips");
+      if (chipsEl) {
+        chipsEl.style.display = (historicoChat && historicoChat.length > 0) ? "none" : "flex";
+      }
+    }
+
+    function limparHistoricoChat() {
+      if (!confirm("Deseja limpar o histórico desta conversa?")) return;
+      historicoChat = [];
+      localStorage.removeItem("orion_chat_history");
+      renderizarHistoricoChat();
+      showToast("Histórico de conversa limpo.");
+    }
+
+    function enviarMensagemRapida(texto) {
+      const input = document.getElementById("chat-input-box");
+      if (input) {
+        input.value = texto;
+        enviarMensagemChat();
+      }
+    }
+
+    async function enviarMensagemChat() {
+      const input = document.getElementById("chat-input-box");
+      const btnSend = document.getElementById("btn-chat-send");
+      const texto = input.value.trim();
+      if (!texto) return;
+
+      const agora = new Date();
+      const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+
+      // Adiciona mensagem do usuário
+      historicoChat.push({
+        remetente: "user",
+        texto: texto,
+        hora: horaStr
+      });
+      salvarHistoricoChatLocal();
+      renderizarHistoricoChat();
+
+      input.value = "";
+      btnSend.disabled = true;
+
+      // Balão de pensando
+      const container = document.getElementById("chat-messages-list");
+      const loadingId = "bubble-loading-" + Date.now();
+      container.innerHTML += `
+        <div class="chat-bubble bot" id="${loadingId}">
+          <span style="opacity: 0.7;">Pensando e consultando base de conhecimento...</span>
+        </div>
+      `;
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        const res = await fetch("/api/dashboard/ia/consultar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pergunta: texto,
+            telegram_id: usuarioLogado?.telegram_id || null
+          })
+        });
+        const data = await res.json();
+        const loadEl = document.getElementById(loadingId);
+        if (loadEl) loadEl.remove();
+
+        const respTexto = data.resposta || "Não consegui processar a resposta no momento.";
+        historicoChat.push({
+          remetente: "bot",
+          texto: respTexto,
+          hora: horaStr
+        });
+        salvarHistoricoChatLocal();
+        renderizarHistoricoChat();
+      } catch (err) {
+        const loadEl = document.getElementById(loadingId);
+        if (loadEl) loadEl.remove();
+        historicoChat.push({
+          remetente: "bot",
+          texto: "❌ Ocorreu um erro ao comunicar com a inteligência artificial do laboratório.",
+          hora: horaStr
+        });
+        salvarHistoricoChatLocal();
+        renderizarHistoricoChat();
+      } finally {
+        btnSend.disabled = false;
+        input.focus();
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Preenchimento de Tabelas das Abas Secundárias
+    // ──────────────────────────────────────────────────────────────────
+    function popularTabelasSecundarias() {
+      carregarItensInventario();
+      carregarTabelaReposicoes();
+      carregarTabelaAgendamentos();
+      carregarTabelaLogs();
+      carregarGridProtocolos();
+    }
+
+    function carregarItensInventario() {
+      const tbody = document.getElementById("tbody-inventario");
+      if (!tbody) return;
+
+      const catFiltro = document.getElementById("inv-categoria")?.value || "todos";
+      const labFiltro = document.getElementById("inv-lab")?.value || "todos";
+      const stFiltro = document.getElementById("inv-status")?.value || "todos";
+
+      let filtrados = listaItens.filter(item => {
+        if (catFiltro !== "todos" && item.categoria.toLowerCase() !== catFiltro.toLowerCase()) return false;
+        if (labFiltro !== "todos" && item.laboratorio_sigla.toLowerCase() !== labFiltro.toLowerCase()) return false;
+        if (stFiltro !== "todos" && item.estado.toLowerCase() !== stFiltro.toLowerCase()) return false;
+        return true;
+      });
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 25px; color: var(--text-muted);">Nenhum item encontrado com os filtros selecionados.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(i => {
+        const tagCls = i.estado === "Bom" ? "tag-bom" : (i.estado === "Em uso" ? "tag-uso" : "tag-critico");
+        return `
+          <tr>
+            <td><b>${i.nome}</b></td>
+            <td><span style="text-transform: capitalize;">${i.categoria}</span></td>
+            <td><b>${i.quantidade_atual}</b> ${i.unidade_medida}</td>
+            <td><span class="tag-status" style="background:#162340;">${i.laboratorio_sigla} • ${i.localizacao_exata}</span></td>
+            <td>${i.lote || "—"}</td>
+            <td><span class="tag-status ${tagCls}">${i.estado}</span></td>
+            <td>
+              <button class="btn-action-lime" style="padding: 4px 10px; font-size: 11px;" onclick="abrirModalRepor('${i.id}', '${i.nome}', '${i.unidade_medida}')">
+                Reabastecer
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function carregarTabelaReposicoes() {
+      const tbody = document.getElementById("tbody-reposicoes");
+      const lblCount = document.getElementById("reposicoes-counter-lbl");
+      if (!tbody) return;
+
+      if (lblCount) lblCount.textContent = `${listaReposicoes.length} item(ns) sinalizados`;
+
+      if (listaReposicoes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 25px; color: var(--text-muted);">Tudo em ordem! Nenhuma reposição crítica pendente.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = listaReposicoes.map(r => `
+        <tr>
+          <td><b>${r.nome_item}</b></td>
+          <td>${r.categoria}</td>
+          <td><b style="color: #f87171;">${r.quantidade_atual}</b> ${r.unidade_medida}</td>
+          <td>${r.laboratorio}</td>
+          <td><span class="tag-status tag-critico">${r.urgencia}</span></td>
+          <td>${r.solicitado_por}</td>
+          <td>${r.motivo}</td>
+          <td>
+            <button class="btn-action-lime" style="padding: 4px 10px; font-size: 11px;" onclick="abrirModalRepor('${r.item_id}', '${r.nome_item}', '${r.unidade_medida}')">
+              Atender
+            </button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function carregarTabelaAgendamentos() {
+      const tbody = document.getElementById("tbody-agendamentos");
+      if (!tbody) return;
+
+      if (listaAgendamentos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 25px; color: var(--text-muted);">Nenhum agendamento registrado ainda.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = listaAgendamentos.map(a => {
+        const isAgendado = a.status.toLowerCase().includes("agendado") || a.status.toLowerCase().includes("andamento");
+        return `
+          <tr>
+            <td><b>${a.item_nome}</b></td>
+            <td>${a.laboratorio}</td>
+            <td>${a.usuario_nome}</td>
+            <td>${a.data_inicio}</td>
+            <td>${a.data_fim}</td>
+            <td>${a.duracao}</td>
+            <td><span class="tag-status ${isAgendado ? 'tag-uso' : 'tag-bom'}">${a.status}</span></td>
+            <td>
+              ${isAgendado ? `
+                <button class="btn-action-lime" style="padding: 3px 8px; font-size: 10.5px;" onclick="concluirReserva('${a.reserva_id}')">Concluir</button>
+              ` : `—`}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function carregarTabelaLogs() {
+      const tbody = document.getElementById("tbody-logs");
+      if (!tbody) return;
+
+      if (listaLogs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">Nenhum log registrado.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = listaLogs.map(l => `
+        <tr>
+          <td>${l.data}</td>
+          <td><b>${l.usuario_nome}</b></td>
+          <td>${l.item_nome}</td>
+          <td>${l.quantidade}</td>
+          <td><span class="tag-status ${l.estado_devolvido === 'Bom' ? 'tag-bom' : 'tag-critico'}">${l.estado_devolvido}</span></td>
+          <td>${l.observacoes}</td>
+        </tr>
+      `).join("");
+    }
+
+    function carregarGridProtocolos() {
+      const grid = document.getElementById("grid-protocolos-cards");
+      if (!grid) return;
+
+      const protos = listaProtocolos.protocolos || [];
+      const pops = listaProtocolos.pops || [];
+
+      let html = "";
+      pops.forEach(p => {
+        html += `
+          <div class="activity-item-card" style="padding: 18px;" onclick="consultarPOPEspecifico('${p.titulo}')">
+            <div class="act-top-row">
+              <span style="font-size: 20px;">📄</span>
+              <span class="arrow-icon-top">↗</span>
+            </div>
+            <div>
+              <div class="act-title">${p.titulo}</div>
+              <p style="font-size: 11.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                ${p.preview}
+              </p>
+            </div>
+          </div>
+        `;
+      });
+
+      protos.forEach(pr => {
+        html += `
+          <div class="activity-item-card" style="padding: 18px;" onclick="showToast('Protocolo: ${pr.titulo}')">
+            <div class="act-top-row">
+              <span style="font-size: 20px;">📋</span>
+              <span class="tag-status tag-bom" style="font-size: 9.5px;">${pr.versao}</span>
+            </div>
+            <div>
+              <div class="act-title">${pr.titulo}</div>
+              <p style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px;">
+                ${pr.recursos || "Recursos não especificados"}
+              </p>
+            </div>
+          </div>
+        `;
+      });
+
+      if (!html) {
+        html = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px;">Nenhum POP ou protocolo cadastrado. Envie arquivos via comando /adicionar_pop no Telegram.</div>`;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function popularSelectsModais() {
+      const selAgend = document.getElementById("modal-agend-item");
+      const selLog = document.getElementById("modal-log-item");
+      if (!selAgend || !selLog) return;
+
+      const opts = listaItens.map(i => `<option value="${i.id}">${i.nome} (${i.categoria}) — ${i.laboratorio_sigla}</option>`).join("");
+      selAgend.innerHTML = opts || `<option value="">Nenhum item cadastrado</option>`;
+      selLog.innerHTML = opts || `<option value="">Nenhum item cadastrado</option>`;
+    }
+
+    function consultarPOPEspecifico(titulo) {
+      trocarVisualizacao("chat");
+      enviarMensagemRapida(`Como realizar o procedimento: ${titulo}?`);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Ações dos Modais
+    // ──────────────────────────────────────────────────────────────────
+    function abrirModalAuth(forcarLogin = false) {
+      const boxLogin = document.getElementById("auth-box-login");
+      const boxProfile = document.getElementById("auth-box-profile");
+
+      if (usuarioLogado && !forcarLogin) {
+        if (boxLogin) boxLogin.style.display = "none";
+        if (boxProfile) boxProfile.style.display = "block";
+
+        const pName = document.getElementById("profile-user-name");
+        const pRole = document.getElementById("profile-user-role");
+        const pId = document.getElementById("profile-user-id");
+        const pInit = document.getElementById("profile-avatar-initials");
+
+        if (pName) pName.textContent = usuarioLogado.nome;
+        if (pRole) {
+          pRole.textContent = usuarioLogado.nivel_acesso;
+          pRole.className = `tag-status ${usuarioLogado.nivel_acesso === 'Administrador' ? 'tag-uso' : 'tag-bom'}`;
+        }
+        if (pId) pId.textContent = `ID: ${usuarioLogado.telegram_id}`;
+        if (pInit) {
+          const parts = usuarioLogado.nome.trim().split(" ");
+          let init = parts[0][0].toUpperCase();
+          if (parts.length > 1) init += parts[parts.length - 1][0].toUpperCase();
+          pInit.textContent = init;
+        }
+
+        // Aplica imediatamente o status real da conexão no modal
+        definirStatusConexao(conexaoServidorAtiva);
+      } else {
+        if (boxLogin) boxLogin.style.display = "block";
+        if (boxProfile) boxProfile.style.display = "none";
+        if (usuarioLogado) {
+          document.getElementById("auth-nome-input").value = usuarioLogado.nome;
+        }
+        carregarUsuariosParaLoginRapido();
+      }
+      document.getElementById("modal-auth").classList.add("open");
+    }
+
+    function fecharModalAuth() {
+      document.getElementById("modal-auth").classList.remove("open");
+    }
+
+    function trocarParaModoLogin() {
+      const boxLogin = document.getElementById("auth-box-login");
+      const boxProfile = document.getElementById("auth-box-profile");
+      if (boxProfile) boxProfile.style.display = "none";
+      if (boxLogin) boxLogin.style.display = "block";
+      carregarUsuariosParaLoginRapido();
+    }
+
+    async function carregarUsuariosParaLoginRapido() {
+      const container = document.getElementById("quick-users-container");
+      const group = document.getElementById("group-quick-users");
+      if (!container || !group) return;
+
+      try {
+        const res = await fetch("/api/dashboard/usuarios");
+        if (!res.ok) return;
+        const users = await res.json();
+        if (!users || users.length === 0) {
+          group.style.display = "none";
+          return;
+        }
+        group.style.display = "block";
+        container.innerHTML = users.map(u => `
+          <button type="button" class="btn-filter" style="padding: 5px 12px; font-size: 11.5px; border-radius: var(--radius-full); cursor: pointer;" onclick="selecionarUsuarioRapido('${u.nome}', '${u.nivel_acesso}', ${u.telegram_id})">
+            👤 ${u.nome} <span style="opacity: 0.6; font-size: 10px;">(${u.nivel_acesso})</span>
+          </button>
+        `).join("");
+      } catch(e) {
+        group.style.display = "none";
+      }
+    }
+
+    function selecionarUsuarioRapido(nome, nivel, id) {
+      const inputNome = document.getElementById("auth-nome-input");
+      const selectNivel = document.getElementById("auth-nivel-input");
+      if (inputNome) inputNome.value = nome;
+      if (selectNivel) {
+        selectNivel.value = nivel;
+        alternarCampoSenhaAdmin(nivel);
+      }
+      showToast(`Pesquisador selecionado: ${nome}`);
+    }
+
+    async function executarLogout() {
+      try {
+        await fetch("/api/dashboard/auth/logout", { method: "POST" });
+      } catch(e) {}
+      localStorage.removeItem("orion_user_session");
+      usuarioLogado = null;
+      atualizarCabecalhoUsuario();
+      fecharModalAuth();
+      showToast("🚪 Sessão encerrada! Agora você está no modo visitante.");
+      carregarDadosDashboard();
+    }
+
+    function alternarCampoSenhaAdmin(val) {
+      document.getElementById("group-auth-senha").style.display = (val === "Administrador") ? "block" : "none";
+    }
+
+    async function executarLogin() {
+      const user = document.getElementById("auth-nome-input").value.trim();
+      const nivel = document.getElementById("auth-nivel-input").value;
+      const senha = document.getElementById("auth-senha-input").value;
+
+      if (!user) {
+        showToast("Informe seu nome ou ID.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/dashboard/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            usuario: user,
+            nivel_desejado: nivel,
+            senha: senha || null
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Falha na autenticação.");
+
+        usuarioLogado = {
+          telegram_id: data.telegram_id,
+          nome: data.nome,
+          nivel_acesso: data.nivel_acesso,
+          modo: "Web"
+        };
+        localStorage.setItem("orion_user_session", JSON.stringify(usuarioLogado));
+        atualizarCabecalhoUsuario();
+        fecharModalAuth();
+        showToast(`Conectado como ${usuarioLogado.nome} (${usuarioLogado.nivel_acesso})!`);
+        carregarDadosDashboard();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function abrirModalNovoAgendamento() {
+      if (!verificarAutenticacao("agendar um experimento")) return;
+
+      const agora = new Date();
+      agora.setMinutes(0, 0, 0);
+      agora.setHours(agora.getHours() + 1);
+
+      const fim = new Date(agora);
+      fim.setHours(fim.getHours() + 2);
+
+      const fIso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+      document.getElementById("modal-agend-inicio").value = fIso(agora);
+      document.getElementById("modal-agend-fim").value = fIso(fim);
+      document.getElementById("modal-agendamento").classList.add("open");
+    }
+    function fecharModalAgendamento() {
+      document.getElementById("modal-agendamento").classList.remove("open");
+    }
+
+    async function salvarAgendamento() {
+      if (!verificarAutenticacao("confirmar agendamento")) return;
+
+      const itemId = document.getElementById("modal-agend-item").value;
+      const inicio = document.getElementById("modal-agend-inicio").value;
+      const fim = document.getElementById("modal-agend-fim").value;
+
+      if (!itemId || !inicio || !fim) {
+        showToast("Preencha todos os campos do agendamento.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/dashboard/agendamentos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_id: itemId,
+            usuario_id: usuarioLogado.telegram_id,
+            data_inicio: inicio.replace("T", " "),
+            data_fim: fim.replace("T", " "),
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erro ao agendar.");
+
+        showToast("✅ Reserva confirmada com sucesso!");
+        fecharModalAgendamento();
+        carregarDadosDashboard();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function concluirReserva(reservaId) {
+      if (!verificarAutenticacao("concluir esta reserva")) return;
+      if (!confirm("Deseja marcar esta reserva como Concluída?")) return;
+      try {
+        const res = await fetch(`/api/dashboard/agendamentos/${reservaId}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Concluído" })
+        });
+        if (res.ok) {
+          showToast("✅ Reserva concluída com sucesso!");
+          fecharModalDetalheReserva();
+          carregarDadosDashboard();
+        }
+      } catch (e) {
+        showToast("Erro ao atualizar reserva.");
+      }
+    }
+
+    function abrirModalRegistrarLog() {
+      if (!verificarAutenticacao("registrar consumos ou avarias")) return;
+      document.getElementById("modal-log").classList.add("open");
+    }
+    function fecharModalLog() {
+      document.getElementById("modal-log").classList.remove("open");
+    }
+
+    async function salvarLogUso() {
+      if (!verificarAutenticacao("registrar o log de uso")) return;
+
+      const itemId = document.getElementById("modal-log-item").value;
+      const qtd = parseFloat(document.getElementById("modal-log-qtd").value) || 0;
+      const estado = document.getElementById("modal-log-estado").value;
+      const obs = document.getElementById("modal-log-obs").value;
+      const repor = document.getElementById("modal-log-repor").checked;
+
+      if (!itemId) {
+        showToast("Selecione um item.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/dashboard/logs/registrar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_id: itemId,
+            usuario_id: usuarioLogado.telegram_id,
+            quantidade: qtd,
+            estado: estado,
+            observacoes: obs,
+            reposicao_necessaria: repor
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erro ao registrar.");
+
+        showToast("✅ Uso registrado no histórico!");
+        fecharModalLog();
+        carregarDadosDashboard();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function abrirModalRepor(id, nome, un) {
+      if (!verificarAutenticacao("reabastecer o inventário")) return;
+
+      document.getElementById("modal-repor-id").value = id;
+      document.getElementById("modal-repor-title").textContent = `Reabastecer: ${nome}`;
+      document.getElementById("modal-repor-un").textContent = un || "un";
+      document.getElementById("modal-repor-qtd").value = "";
+      document.getElementById("modal-repor-lote").value = "";
+      document.getElementById("modal-repor").classList.add("open");
+    }
+    function fecharModalRepor() {
+      document.getElementById("modal-repor").classList.remove("open");
+    }
+
+    async function salvarReabastecimento() {
+      if (!verificarAutenticacao("reabastecer item")) return;
+
+      const id = document.getElementById("modal-repor-id").value;
+      const qtd = parseFloat(document.getElementById("modal-repor-qtd").value);
+      const lote = document.getElementById("modal-repor-lote").value;
+
+      if (!id || isNaN(qtd) || qtd <= 0) {
+        showToast("Informe uma quantidade válida.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/dashboard/itens/${id}/reabastecer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quantidade_adicionada: qtd,
+            lote: lote || null,
+            usuario_id: usuarioLogado.telegram_id,
+            usuario_nome: usuarioLogado.nome
+          })
+        });
+        if (res.ok) {
+          showToast("✅ Item reabastecido com sucesso!");
+          fecharModalRepor();
+          carregarDadosDashboard();
+        }
+      } catch(e) {
+        showToast("Erro ao reabastecer.");
+      }
+    }
+
+    function abrirModalNovoItem() {
+      if (!verificarAutenticacao("cadastrar novos itens")) return;
+      document.getElementById("modal-novo-item").classList.add("open");
+    }
+    function fecharModalNovoItem() {
+      document.getElementById("modal-novo-item").classList.remove("open");
+    }
+
+    async function salvarNovoItem() {
+      if (!verificarAutenticacao("cadastrar item")) return;
+
+      const nome = document.getElementById("novo-nome").value.trim();
+      const cat = document.getElementById("novo-categoria").value;
+      const lab = document.getElementById("novo-lab").value;
+      const qtd = parseFloat(document.getElementById("novo-qtd").value) || 0;
+      const un = document.getElementById("novo-unidade").value.trim() || "un";
+      const local = document.getElementById("novo-local").value.trim();
+
+      if (!nome) {
+        showToast("O nome do item é obrigatório.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/dashboard/itens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome: nome,
+            categoria: cat,
+            quantidade_inicial: qtd,
+            unidade_medida: un,
+            laboratorio: lab,
+            bancada: local || null,
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erro ao cadastrar.");
+
+        showToast(`✅ Item '${nome}' cadastrado!`);
+        fecharModalNovoItem();
+        carregarDadosDashboard();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function executarBuscaRapida(termo) {
+      if (!termo) return;
+      const t = termo.toLowerCase();
+      trocarVisualizacao("inventario");
+      const rows = document.querySelectorAll("#tbody-inventario tr");
+      rows.forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(t) ? "" : "none";
+      });
+    }
+
+    function exportarInventarioCSV() {
+      if (!listaItens || !listaItens.length) return;
+      let csv = "ID,Nome,Categoria,Quantidade,Unidade,Laboratório,Localização,Lote,Status\n";
+      listaItens.forEach(i => {
+        csv += `"${i.id}","${i.nome}","${i.categoria}",${i.quantidade_atual},"${i.unidade_medida}","${i.laboratorio_sigla}","${i.localizacao_exata}","${i.lote}","${i.estado}"\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Inventario_Orion_${new Date().toISOString().slice(0,10)}.csv`);
+      link.click();
+    }
+
+    function abrirDetalheReserva(id) {
+      const res = listaAgendamentos.find(a => String(a.reserva_id) === String(id));
+      if (!res) return;
+
+      const modal = document.getElementById("modal-detalhe-reserva");
+      const title = document.getElementById("detalhe-reserva-titulo");
+      const conteudo = document.getElementById("detalhe-reserva-conteudo");
+      const actions = document.getElementById("detalhe-reserva-actions");
+
+      if (title) title.textContent = `🔬 ${res.item_nome}`;
+      const isAtivo = res.status.toLowerCase().includes("agendado") || res.status.toLowerCase().includes("andamento");
+
+      if (conteudo) {
+        conteudo.innerHTML = `
+          <div style="background: var(--bg-card-sub); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span class="tag-status ${isAtivo ? 'tag-uso' : 'tag-bom'}">${res.status}</span>
+              <span style="font-size: 12px; color: var(--text-muted);">${res.laboratorio}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+              <div>
+                <span style="color: var(--text-muted); font-size: 11px; display: block;">Pesquisador</span>
+                <b>${res.usuario_nome}</b>
+              </div>
+              <div>
+                <span style="color: var(--text-muted); font-size: 11px; display: block;">Duração</span>
+                <b>${res.duracao}</b>
+              </div>
+              <div>
+                <span style="color: var(--text-muted); font-size: 11px; display: block;">Início</span>
+                <b>${res.data_inicio}</b>
+              </div>
+              <div>
+                <span style="color: var(--text-muted); font-size: 11px; display: block;">Término</span>
+                <b>${res.data_fim}</b>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (actions) {
+        actions.innerHTML = `
+          <button class="btn-action-secondary" onclick="fecharModalDetalheReserva()">Fechar</button>
+          ${isAtivo ? `
+            <button class="btn-action-lime" onclick="concluirReserva('${res.reserva_id}')">
+              ✅ Marcar como Concluído
+            </button>
+          ` : ''}
+        `;
+      }
+
+      if (modal) modal.classList.add("open");
+    }
+
+    function fecharModalDetalheReserva() {
+      const modal = document.getElementById("modal-detalhe-reserva");
+      if (modal) modal.classList.remove("open");
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast-msg");
+      if (!t) return;
+      t.textContent = msg;
+      t.style.display = "block";
+      setTimeout(() => {
+        t.style.display = "none";
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

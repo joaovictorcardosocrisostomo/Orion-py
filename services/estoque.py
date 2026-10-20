@@ -117,3 +117,113 @@ def editar_item(item_id: uuid.UUID, dados_atualizacao: dict) -> bool:
         session.add(item)
         session.commit()
         return True
+
+def cadastrar_novo_item(
+    nome: str,
+    categoria: str,
+    quantidade_inicial: float,
+    unidade_medida: str,
+    laboratorio_sigla: str | None = None,
+    bancada: str | None = None,
+    complemento: str | None = None,
+    marca: str | None = None,
+    lote: str | None = None,
+    validade: str | None = None,
+    frascos: int | None = None,
+    estado: str = "Bom",
+) -> Item:
+    """
+    Cadastra um novo item unificado no inventário do laboratório.
+    Suporta reagentes, equipamentos, vidrarias e insumos de limpeza.
+    A localização exata é composta por bancada e complemento (ex: 'Bancada 01 (do lado da pia)').
+    """
+    from datetime import datetime
+    from database.models import StatusItem
+
+    # Normalização da Categoria
+    cat_lower = (categoria or "").lower().strip()
+    if "reag" in cat_lower:
+        cat_enum = CategoriaItem.REAGENTE
+    elif "equip" in cat_lower:
+        cat_enum = CategoriaItem.EQUIPAMENTO
+    elif "vidr" in cat_lower:
+        cat_enum = CategoriaItem.VIDRARIA
+    elif "limp" in cat_lower:
+        cat_enum = CategoriaItem.LIMPEZA
+    else:
+        cat_enum = CategoriaItem.REAGENTE
+
+    # Normalização do Status/Estado
+    est_lower = (estado or "").lower().strip()
+    if "uso" in est_lower:
+        est_enum = StatusItem.EM_USO
+    elif "manut" in est_lower or "calibr" in est_lower:
+        est_enum = StatusItem.REQUER_MANUTENCAO
+    elif "quebr" in est_lower:
+        est_enum = StatusItem.QUEBRADO
+    elif "esgot" in est_lower:
+        est_enum = StatusItem.ESGOTADO
+    else:
+        est_enum = StatusItem.BOM
+
+    # Composição da localização detalhada: bancada + complemento
+    bancada_str = (bancada or "").strip()
+    comp_str = (complemento or "").strip()
+    if bancada_str and comp_str:
+        localizacao = f"{bancada_str} ({comp_str})"
+    elif bancada_str:
+        localizacao = bancada_str
+    elif comp_str:
+        localizacao = comp_str
+    else:
+        localizacao = None
+
+    # Parsing de validade se fornecida
+    dt_validade = None
+    if validade:
+        if isinstance(validade, datetime):
+            dt_validade = validade
+        elif isinstance(validade, str) and validade.strip() and validade.strip() != "—":
+            val_clean = validade.strip()
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+                try:
+                    dt_validade = datetime.strptime(val_clean, fmt)
+                    break
+                except ValueError:
+                    continue
+
+    with Session(engine) as session:
+        lab_id = None
+        if laboratorio_sigla and laboratorio_sigla.strip() and laboratorio_sigla.strip().lower() != "todos":
+            lab_busca = laboratorio_sigla.strip()
+            lab_existente = session.exec(
+                select(Laboratorio).where(
+                    (Laboratorio.sigla.ilike(lab_busca)) | (Laboratorio.nome.ilike(lab_busca))
+                )
+            ).first()
+            if lab_existente:
+                lab_id = lab_existente.id
+            else:
+                novo_lab = Laboratorio(nome=lab_busca.upper(), sigla=lab_busca.upper())
+                session.add(novo_lab)
+                session.commit()
+                session.refresh(novo_lab)
+                lab_id = novo_lab.id
+
+        novo_item = Item(
+            nome=nome.strip(),
+            categoria=cat_enum,
+            quantidade_atual=max(0.0, float(quantidade_inicial)),
+            unidade_medida=unidade_medida.strip() if unidade_medida else "un",
+            frascos=int(frascos) if frascos is not None and str(frascos).isdigit() else None,
+            laboratorio_id=lab_id,
+            localizacao_exata=localizacao,
+            marca=marca.strip() if marca and marca.strip() != "—" else None,
+            lote=lote.strip() if lote and lote.strip() != "—" else None,
+            validade=dt_validade,
+            estado=est_enum,
+        )
+        session.add(novo_item)
+        session.commit()
+        session.refresh(novo_item)
+        return novo_item

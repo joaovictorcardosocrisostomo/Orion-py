@@ -5,29 +5,52 @@ from fastapi import FastAPI
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.redis import RedisStorage
 
 # Importações internas
 from core.config import settings
-from database.db import init_db, reset_db
-from bot.handlers import handler_estoque, nlp, onboarding, experimento, relatorio, auditoria, adicionar_pop
+from database.db import init_db, reset_db, redis_client
+from bot.handlers import (
+    handler_estoque,
+    nlp,
+    onboarding,
+    experimento,
+    relatorio,
+    auditoria,
+    adicionar_pop,
+    dashboard,
+)
 from services.scheduler import iniciar_scheduler
+from api.dashboard import router as dashboard_api_router
+
+from bot.middlewares.auth import AuthMiddleware
 
 # Logging
 logging.basicConfig(level=logging.INFO)
 
 # Instâncias
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+dp = Dispatcher(storage=RedisStorage(redis=redis_client))
+
+# Middleware global de autorização (restringe acesso a Membros e Administradores)
+dp.message.outer_middleware(AuthMiddleware())
+dp.callback_query.outer_middleware(AuthMiddleware())
 
 # Handlers - transferidos pra pasta bot em forma de Routers
-# Conectando routers ao dispatcher
-dp.include_router(onboarding.router)
-dp.include_router(handler_estoque.router)
-dp.include_router(relatorio.router)
-dp.include_router(nlp.router)
-dp.include_router(experimento.router)
-dp.include_router(auditoria.router)
-dp.include_router(adicionar_pop.router)
+# Conectando routers ao dispatcher (com verificação para evitar re-anexo)
+routers = [
+    onboarding.router,
+    dashboard.router,
+    handler_estoque.router,
+    relatorio.router,
+    nlp.router,
+    experimento.router,
+    auditoria.router,
+    adicionar_pop.router,
+]
+for r in routers:
+    if r.parent_router is None:
+        dp.include_router(r)
 
 # Função que mantém o bot rodando em segundo plano
 async def run_bot():
@@ -54,10 +77,31 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     task.cancel()
-    logging.info("Bot parado.")
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await redis_client.aclose()
+    except Exception:
+        pass
+    try:
+        await bot.session.close()
+    except Exception:
+        pass
+    logging.info("Bot e conexões parados.")
 
 app = FastAPI(title="Orion Cientista API", lifespan=lifespan)
+app.include_router(dashboard_api_router)
 
 @app.get("/")
 def read_root():
-    return {"status": "Servidor Orion rodando. Bot via Polling."}
+    return {
+        "status": "Servidor Orion rodando. Bot via Polling.",
+        "dashboard_url": "/dashboard",
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

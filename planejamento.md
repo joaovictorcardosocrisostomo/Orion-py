@@ -300,3 +300,41 @@ Para construirmos isso de forma organizada, proponho dividirmos o código em Spr
 
 **Integração com `/experimento`:**
 Quando o Sprint 6 estiver pronto, o comando `/experimento` ganhará um **modo inteligente**: se o RAG tiver um documento relevante para o que o usuário quer fazer, o sistema sugerirá o protocolo completo — se não, cai no fluxo manual do Módulo F.
+
+---
+
+* **Sprint 7: Painel Web LIMS & Integração Telegram MiniApp (Concluído)**
+*Entrega uma interface visual de alto padrão estético para os analistas e coordenadores do laboratório, com acesso direto pelo Telegram e pelo navegador.*
+
+**Funcionalidades Implementadas:**
+1. **Dashboard SPA (FastAPI + HTML5/CSS3/JS puro):**
+   * KPIs em tempo real: Total de Itens, Equipamentos em Uso, Alertas de Reposição Crítica, Agendamentos do Dia.
+   * **Aba 1 (Inventário Geral):** Tabela responsiva com busca instantânea, filtros por categoria (Reagentes, Equipamentos, Vidrarias, Limpeza), laboratório (LAT, POA, Croma, Lanagua, LabITech) e status com badges visuais.
+   * **Aba 2 (Reposições & Compras):** Itens com estoque zerado ou sinalizados no `LogUso` (`reposicao_necessaria = True`), com nível de urgência e botão de reabastecimento rápido.
+   * **Aba 3 (Agendamentos & Bancada):** Linha do tempo de reservas ativas com indicação em tempo real de equipamentos em uso.
+   * **Aba 4 (Histórico de Auditoria & Avarias):** Feed das últimas prestações de contas das 17h e registros de quebras.
+   * **Aba 5 (Protocolos & POPs):** Visualização dos métodos operacionais salvos e procedimentos vetorizados no RAG.
+   * **Exportação CSV:** Download instantâneo da planilha de inventário formatada para auditorias.
+2. **Integração Telegram (/dashboard e /painel):**
+   * Comando `/dashboard` ou `/painel` no Telegram envia um resumo dos indicadores com botões inline:
+     - `📱 Abrir MiniApp no Telegram` (via `WebAppInfo`, abrindo o painel direto na tela do Telegram).
+     - `🌐 Abrir no Navegador` (para acesso via desktop/Chrome).
+     - `🔄 Atualizar Indicadores` (atualiza os números direto na mensagem do chat).
+3. **Endpoints REST Implementados (`api/dashboard.py`):**
+   * `GET /dashboard` — Interface web completa.
+   * `GET /api/dashboard/stats` — Métricas globais.
+   * `GET /api/dashboard/itens` — Inventário filtrado.
+   * `GET /api/dashboard/reposicoes` — Compras pendentes.
+   * `GET /api/dashboard/agendamentos` — Reservas do laboratório.
+   * `GET /api/dashboard/logs` — Auditorias recentes.
+   * `GET /api/dashboard/protocolos` — Protocolos e POPs.
+   * `POST /api/dashboard/itens/{id}/reabastecer` — Atualização rápida de estoque com auditoria por analista.
+   * `POST /api/dashboard/auth/login` — Autenticação de Membro (acesso direto) ou Administrador (com senha mestre).
+   * `GET /api/dashboard/usuarios` — Lista de pesquisadores cadastrados.
+4. **Auto-Refresh em Tempo Real & Autenticação Web:**
+   * **Sincronização Contínua:** Polling a cada 15 segundos com indicador visual dinâmico (`Ao Vivo (15s)`), sem interromper a navegação ou preenchimento de modais.
+   * **Identificação de Usuário ("Laboratório Orion"):** O botão no cabeçalho funciona como login dinâmico:
+     - Permite entrada como **Membro** (acesso rápido pelo nome) ou **Administrador** (validação com senha mestre).
+     - Integração transparente com Telegram WebApp e persistência no `localStorage`.
+     - Exibição de card de perfil com privilégios ativos e opção de logout/troca de usuário.
+

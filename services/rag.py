@@ -181,14 +181,14 @@ def busca_vetorial(consulta: str, limite: int = 5) -> list[tuple[ProcedimentoRAG
 
 # ── 4. Funções para o LLM (Function Calling) ─────────────────────────
 
-def formatar_contexto_rag(termo_busca: str, limite: int = 3) -> str:
+def formatar_contexto_rag(termo_busca: str, limite: int = 2) -> str:
     """
-    Busca documentos similares e retorna o conteúdo em texto puro
-    para ser injetado como contexto no LLM (síntese).
+    Busca documentos similares e retorna o conteúdo sintetizado em texto
+    otimizado para caber no limite de tokens do LLM (evita estouro de TPM).
 
     Args:
         termo_busca: O que o usuário quer saber.
-        limite: Máximo de documentos (padrão 3).
+        limite: Máximo de documentos mais similares (padrão 2).
 
     Returns:
         Texto puro com título e conteúdo dos documentos encontrados,
@@ -205,10 +205,10 @@ def formatar_contexto_rag(termo_busca: str, limite: int = 3) -> str:
 
     blocos = []
     for i, (doc, dist) in enumerate(resultados, 1):
-        # Trunca o conteúdo para evitar estourar o limite de tokens do LLM (erro 413)
-        conteudo_limitado = doc.conteudo_texto.strip()[:4_000]
-        if len(doc.conteudo_texto) > 4_000:
-            conteudo_limitado += "\n...[trecho truncado para evitar excesso de tokens]..."
+        # Trunca para 1.500 caracteres (~350 tokens) para evitar estouro de TPM (Rate Limit 429)
+        conteudo_limitado = doc.conteudo_texto.strip()[:1_500]
+        if len(doc.conteudo_texto) > 1_500:
+            conteudo_limitado += "\n...[trecho truncado para otimização de tokens]..."
 
         blocos.append(
             f"--- DOCUMENTO {i} ---\n"
@@ -260,3 +260,25 @@ def consultar_rag(termo_busca: str) -> str:
         )
 
     return "\n".join(linhas)
+
+
+def listar_todos_procedimentos() -> list[dict]:
+    """
+    Retorna todos os POPs e documentos RAG realmente cadastrados no banco de dados.
+    """
+    try:
+        with Session(engine) as session:
+            docs = session.exec(select(ProcedimentoRAG)).all()
+            return [
+                {
+                    "id": str(d.id),
+                    "titulo": d.titulo_documento,
+                    "tamanho_chars": len(d.conteudo_texto),
+                    "preview": d.conteudo_texto[:250].strip() + ("..." if len(d.conteudo_texto) > 250 else ""),
+                }
+                for d in docs
+            ]
+    except Exception as e:
+        logging.error(f"Erro ao listar procedimentos: {e}")
+        return []
+

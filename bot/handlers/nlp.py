@@ -5,11 +5,13 @@ from datetime import datetime
 from services.llm import executar_loop_funcoes, sintetizar_com_rag
 from services.estoque import listar_itens, formatar_mensagem_estoque, atualizar_quantidade
 from services.agendamento import criar_reserva
-from services.rag import formatar_contexto_rag
+from services.rag import formatar_contexto_rag, listar_todos_procedimentos
 from services.log_uso import registrar_log_uso
 from services.protocolo import criar_protocolo_experimental, formatar_protocolo
 from services.scheduler import agendar_alarme_inicio
 from database.models import StatusItem
+from bot.apresentacao import eh_pergunta_apresentacao, MENSAGEM_APRESENTACAO
+from bot.telegram_helpers import responder_com_seguranca
 
 router = Router()
 
@@ -99,18 +101,45 @@ async def executor_consultar_rag(args: dict, telegram_id: int) -> str:
     if not termo:
         return "Sobre qual procedimento você quer saber?"
 
-    contexto = formatar_contexto_rag(termo, limite=3)
+    contexto = formatar_contexto_rag(termo, limite=2)
     if not contexto:
         return (
             f"🔍 Não encontrei nenhum procedimento relacionado a '{termo}' "
             f"no banco de conhecimento do laboratório."
         )
 
-    return await sintetizar_com_rag(
-        pergunta_usuario=f"Busquei '{termo}'. Resuma o procedimento encontrado.",
-        contexto_rag=contexto,
-        telegram_id=telegram_id,
-    )
+    # Retorna o contexto extraído dos POPs diretamente para o orquestrador sintetizar,
+    # eliminando a chamada intermediária redundante de IA (economiza mais de 3.000 tokens)
+    return contexto
+
+
+async def executor_listar_procedimentos(args: dict, telegram_id: int) -> str:
+    """Lista todos os POPs e protocolos realmente cadastrados no banco de dados."""
+    from sqlmodel import Session, select
+    from database.db import engine
+    from database.models import ProtocoloExperimental
+
+    pops = listar_todos_procedimentos()
+    with Session(engine) as session:
+        protocolos = session.exec(select(ProtocoloExperimental)).all()
+
+    if not pops and not protocolos:
+        return "📚 Não há nenhum POP ou protocolo cadastrado no banco de conhecimento no momento. Use o comando /adicionar_pop para cadastrar um novo documento."
+
+    linhas = ["📚 <b>Documentos e POPs cadastrados no laboratório:</b>\n"]
+    if pops:
+        linhas.append("<b>Procedimentos Operacionais Padrão (POPs):</b>")
+        for p in pops:
+            linhas.append(f"• 📄 <b>{p['titulo']}</b>")
+        linhas.append("")
+
+    if protocolos:
+        linhas.append("<b>Protocolos Experimentais:</b>")
+        for proto in protocolos:
+            linhas.append(f"• 📋 <b>{proto.titulo}</b> (v{proto.versao})")
+
+    linhas.append("\nPara consultar o passo a passo ou reagentes de qualquer um deles, me diga o nome do procedimento!")
+    return "\n".join(linhas)
 
 
 async def _tool_movimentar_estoque(
@@ -201,6 +230,71 @@ async def executor_criar_protocolo_experimental(args: dict, telegram_id: int) ->
     )
 
 
+async def executor_cadastrar_item(args: dict, telegram_id: int) -> str:
+    """Executa o cadastro de um novo item no estoque através de function calling."""
+    from services.estoque import cadastrar_novo_item
+
+    nome = args.get("nome", "").strip()
+    categoria = args.get("categoria", "reagente")
+    qtd = args.get("quantidade", 0)
+    unidade = args.get("unidade_medida", "un")
+    lab = args.get("laboratorio", "LAT")
+    bancada = args.get("bancada")
+    complemento = args.get("complemento_local") or args.get("complemento")
+    marca = args.get("marca")
+    lote = args.get("lote")
+    validade = args.get("validade")
+    frascos = args.get("frascos")
+
+    if not nome:
+        return "❌ O nome do item é obrigatório para cadastrá-lo."
+
+    try:
+        qtd_num = float(qtd)
+    except (ValueError, TypeError):
+        return f"❌ Quantidade inválida: '{qtd}'. Informe um número válido."
+
+    try:
+        item = cadastrar_novo_item(
+            nome=nome,
+            categoria=categoria,
+            quantidade_inicial=qtd_num,
+            unidade_medida=unidade,
+            laboratorio_sigla=lab,
+            bancada=bancada,
+            complemento=complemento,
+            marca=marca,
+            lote=lote,
+            validade=validade,
+            frascos=frascos,
+            estado="Bom",
+        )
+
+        local_formatado = item.localizacao_exata if item.localizacao_exata else "Não especificada"
+        lab_sigla = lab.upper() if lab else "LAT"
+
+        linhas = [
+            f"✅ <b>Item cadastrado com sucesso no inventário!</b>\n",
+            f"📦 <b>Nome:</b> {item.nome}",
+            f"🏷️ <b>Categoria:</b> {item.categoria.value if hasattr(item.categoria, 'value') else item.categoria}",
+            f"⚖️ <b>Quantidade:</b> {item.quantidade_atual} {item.unidade_medida}",
+            f"🏢 <b>Laboratório:</b> {lab_sigla}",
+            f"📍 <b>Localização:</b> {local_formatado}",
+        ]
+        if item.frascos:
+            linhas.append(f"🧪 <b>Frascos:</b> {item.frascos}")
+        if item.marca:
+            linhas.append(f"🏭 <b>Marca:</b> {item.marca}")
+        if item.lote:
+            linhas.append(f"🔢 <b>Lote:</b> {item.lote}")
+        if item.validade:
+            linhas.append(f"📅 <b>Validade:</b> {item.validade.strftime('%d/%m/%Y')}")
+
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"❌ Erro ao cadastrar item no banco de dados: {str(e)}"
+
+
 # ════════════════════════════════════════════════════════════════════
 # EXECUTOR — mapeia o nome da tool para a implementação real
 # ════════════════════════════════════════════════════════════════════
@@ -211,6 +305,8 @@ EXECUTOR = {
     "buscar_limpeza": executor_buscar_limpeza,
     "registrar_agendamento": executor_registrar_agendamento,
     "consultar_rag": executor_consultar_rag,
+    "listar_procedimentos": executor_listar_procedimentos,
+    "cadastrar_item": executor_cadastrar_item,
     "registrar_consumo": executor_registrar_consumo,
     "registrar_descarte": executor_registrar_descarte,
     "registrar_reposicao": executor_registrar_reposicao,
@@ -223,6 +319,18 @@ async def chat_natural(message: Message):
     if message.bot is None or message.from_user is None or message.text is None:
         return
 
+    # Se o usuário perguntar o que o bot é capaz de fazer / suas funções
+    if eh_pergunta_apresentacao(message.text):
+        await message.answer(MENSAGEM_APRESENTACAO, parse_mode="HTML")
+        return
+
+    # Se o usuário pedir o dashboard diretamente sem a barra
+    texto_limpo = message.text.lower().strip()
+    if texto_limpo in {"dashboard", "painel", "abrir dashboard", "abrir painel", "ver dashboard", "ver painel", "link dashboard", "link do dashboard"}:
+        from bot.handlers.dashboard import cmd_dashboard
+        await cmd_dashboard(message)
+        return
+
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     # O loop de function calling resolve a tarefa em múltiplas rodadas:
@@ -233,7 +341,5 @@ async def chat_natural(message: Message):
         executor=EXECUTOR,
     )
 
-    if resultado["tipo"] == "texto":
-        await message.answer(resultado["conteudo"], parse_mode="HTML")
-    else:
-        await message.answer(resultado.get("conteudo", "Tive um problema ao processar seu pedido."))
+    conteudo = resultado.get("conteudo") or "Tive um problema ao processar seu pedido."
+    await responder_com_seguranca(message, conteudo)

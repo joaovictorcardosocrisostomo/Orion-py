@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -8,10 +8,27 @@ from services.usuario import salvar_usuario, buscar_usuario
 from database.models import NivelAcesso
 from core.config import settings
 
+from bot.apresentacao import MENSAGEM_APRESENTACAO
+
 router = Router()
 
 # Senha mestre (lida do .env — padrão: orion2026)
 SENHA_ADMIN = settings.ADMIN_SECRET
+
+@router.message(Command("ajuda", "help", "funcoes", "comandos"))
+async def cmd_ajuda(message: Message):
+    """Apresenta o resumo de todas as capacidades e comandos do bot."""
+    await message.answer(MENSAGEM_APRESENTACAO, parse_mode="HTML")
+
+@router.message(Command("cancelar", "cancel"))
+async def cmd_cancelar(message: Message, state: FSMContext):
+    """Cancela qualquer operação ou fluxo FSM em andamento no bot."""
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("ℹ️ Nenhuma operação em andamento para cancelar.")
+        return
+    await state.clear()
+    await message.answer("❌ <b>Operação cancelada com sucesso.</b> Como posso ajudar agora?", parse_mode="HTML")
 
 # 1. Definindo as etapas do questionário de Onboarding
 class FluxoRegistro(StatesGroup):
