@@ -338,3 +338,91 @@ Quando o Sprint 6 estiver pronto, o comando `/experimento` ganhará um **modo in
      - Integração transparente com Telegram WebApp e persistência no `localStorage`.
      - Exibição de card de perfil com privilégios ativos e opção de logout/troca de usuário.
 
+---
+
+* **Sprint 8: Relatórios Automatizados, Tempo de Bancada, Caderno ELN, Gestão de Manutenção & Briefing Noturno (Concluído)**
+*Entrega 5 novas dimensões críticas de automação laboratorial e conformidade metrológica (ISO/IEC 17025 e BPL) tanto no Telegram Bot quanto no Painel Web LIMS.*
+
+**Funcionalidades Implementadas:**
+
+1. **Módulo G: Rastreamento de Tempo Real de Bancada & Relatórios Automatizados (`services/relatorio_bancada.py`):**
+   - **Medição Real:** Registro de `inicio_real`, `fim_real`, cálculo de duração em minutos e desvio planejado (`desvio_planejado_minutos`) nas reservas.
+   - **Botão Iniciar:** Ativação instantânea do experimento direto pelo Telegram (`/hoje`) registrando o início real da bancada com alarme sincronizado.
+   - **Métricas Consolidadas:** Agregação de horas totais, desvio médio de agenda, tempo por equipamento e produtividade por analista.
+   - **Exportação Multiformato:** Geração de relatórios analíticos em Markdown e planilhas em CSV (`/api/dashboard/relatorios/tempo-bancada/csv`).
+   - **Interface Web:** Aba "Tempo de Bancada" no dashboard com 3 KPI cards, filtro por período (7, 15, 30, 90 dias) e tabela de histórico.
+
+2. **Módulo H: Caderno de Laboratório Eletrônico Automatizado (ELN) (`services/caderno.py`):**
+   - **Código Sequencial ISO:** Geração automática e atômica de código de ensaio rastreável (`EXP-YYYY-XXXX`).
+   - **Registro Completo:** Amostra/lote, objetivo, materiais, dados brutos/leituras analíticas, desvios e tempo de bancada vinculado.
+   - **Comando `/caderno`:** Máquina de estados (FSM) no Telegram permitindo abertura guiada de folha de ensaio direto da bancada.
+   - **Exportação Markdown:** Download de relatórios técnicos individuais formatados para auditoria (`/api/dashboard/caderno/{id}/exportar`).
+   - **Interface Web:** Aba "Caderno (ELN)" com busca instantânea em tempo real, badges de status de conformidade e exportação.
+
+3. **Módulo I: Controle Metrológico & Gestão de Manutenções (`services/manutencao.py`):**
+   - **Ciclo Preventivo e Calibrações:** Agendamento periódico (`frequencia_manutencao_dias`), cálculo de vencimento (`proxima_manutencao`) e registro de certificados metrológicos com rastreabilidade RBC.
+   - **Horímetro de Operação:** Monitoramento de horas de operação limite (`horas_operacao_limite`) vs acumuladas (`horas_operacao_acumuladas`) para substituição preventiva de lâmpadas UV/deuterio, colunas e bombas.
+   - **Abertura Corretiva Automática:** Ao relatar avaria no checklist de finalização, o sistema cria automaticamente um ticket corretivo e coloca o equipamento em estado "Quebrado".
+   - **Alerta Diário às 08h00:** Job agendado matinal que avisa os administradores sobre calibrações vencidas ou próximas de vencer (15 dias).
+   - **Comando `/manutencao` & Aba Web:** Visualização metrológica completa, 4 KPIs de status e histórico de intervenções.
+
+4. **Módulo J: Sistema Centralizado de Notificações (`services/notificacoes.py`):**
+   - **Persistência Estruturada:** Tabela `Notificacao` no banco de dados com categoria (`ALERTA_ESTOQUE`, `MANUTENCAO`, `AGENDAMENTO`, `BRIEFING_DIARIO`, `GERAL`), título e status de entrega/leitura.
+   - **Disparo Resiliente:** Tratamento de bloqueios do Telegram Bot (`TelegramForbiddenError`, timeout) sem interromper a rotina do servidor.
+   - **Notificação de Administradores:** Broadcast automático para todos os administradores cadastrados em caso de quebras ou cancelamentos operacionais.
+
+5. **Módulo K: Briefing Noturno de Planejamento Registrado (`services/scheduler.py`):**
+   - **Disparo Automático às 17h30:** Executado de segunda a sexta-feira via APScheduler.
+   - **Público-Alvo Inteligente:** Identifica analistas que possuem agendamentos confirmados para o dia útil seguinte.
+   - **Briefing Detalhado:** Envia resumo com horários de início/fim, equipamento alocado, insumos previstos e botões interativos `[✅ Confirmar Planejamento]` e `[✏️ Ajustar no Painel]`.
+
+6. **Endpoints REST Implementados (`api/dashboard.py`):**
+   - `GET /api/dashboard/relatorios/tempo-bancada` & `/csv`
+   - `GET /api/dashboard/caderno`, `POST /api/dashboard/caderno`, `GET /api/dashboard/caderno/{id}/exportar`
+   - `GET /api/dashboard/manutencoes/status`, `GET /api/dashboard/manutencoes/historico`, `POST /api/dashboard/manutencoes`
+   - `GET /api/dashboard/notificacoes`, `POST /api/dashboard/notificacoes/{id}/lida`
+
+---
+
+* **Sprint 9: Governança Laboratorial, Autoria do Caderno ELN, RBAC de Reservas & Sistema Centralizado de Notificações (Em Implementação)**
+*Estabelece o controle rigoroso de autoria e conformidade científica (ISO 17025 e BPL) no Caderno de Laboratório Eletrônico e na gestão de bancada, integrando mensageria ativa e proteção contra sobreposição indevida.*
+
+**Diretrizes e Funcionalidades:**
+
+1. **Caderno de Laboratório Eletrônico (ELN) por Usuário:**
+   * **Identificação com Iniciais no Código:** O código do ensaio adota o padrão EXP-{INICIAIS}-{ANO}-{SEQ:04d} (ex: EXP-JV-2026-0001 para João Victor, EXP-T-2026-0001 para Thiago, EXP-AV-2026-0001 para Américo Vitor). A extração automática de iniciais garante rastreabilidade imediata da autoria do ensaio.
+   * **Transparência de Leitura Universal:** Qualquer membro ou administrador cadastrado pode ler, auditar e exportar as folhas de ensaio de todos os pesquisadores do laboratório, promovendo reprodutibilidade e cooperação científica.
+   * **Edição Exclusiva do Autor (Imutabilidade de Terceiros):** Apenas o pesquisador criador/dono da folha de ensaio tem permissão para alterar títulos, observações, dados brutos, desvios e medições. Nem mesmo administradores podem alterar o registro técnico de outro analista, resguardando a fidedignidade analítica.
+   * **Tela Dedicada com Sistema de Busca Avançado:**
+     - Pílulas de alternância rápida: [ Todos os Cadernos ] e [ Meus Cadernos ] com contador dinâmico.
+     - Busca textual instantânea (código, título, analista, amostra, objetivo, reagente).
+     - Filtro por Pesquisador/Analista (select dropdown dinâmico com todos os membros).
+     - Filtro por Status do Ensaio (Finalizado, Em Andamento, Rascunho).
+     - Filtro por Período de Registro (Hoje, Últimos 7 dias, Últimos 30 dias, Todos).
+     - Ações por folha: Visualizar (todos), Editar (somente o autor) e Baixar Markdown (todos).
+
+2. **Gestão de Reservas e Sessões de Bancada com Privilégio Administrativo:**
+   * **Visibilidade Coletiva:** Todos os membros têm acesso de leitura à agenda completa e aos equipamentos em uso pelos colegas de laboratório.
+   * **Permissões de Modificação & Cancelamento:**
+     - Membros comuns podem alterar e cancelar exclusivamente os seus próprios agendamentos.
+     - Administradores têm permissão de gerenciamento total (*admin override*), podendo reagendar, modificar horários/equipamentos e cancelar reservas de qualquer membro em caso de manutenções emergenciais, calibrações ou redistribuição de bancada.
+   * **Filtro de Visualização:** Interface de agendamentos com filtros [ Todos os Agendamentos ] vs [ Meus Agendamentos ], status e laboratório.
+
+3. **Sistema Centralizado de Notificações Multicanal (services/notificacoes.py):**
+   * **Objetivo Geral:** Criar uma infraestrutura unificada de mensageria proativa e reativa via Telegram Bot e Dashboard Web para eventos críticos de bancada, estoque e governança.
+   * **Sub-itens e Alertas Prioritários:**
+     - **[Sub-item Obrigatório] Alerta de Modificação de Agendamento por Administrador:** Disparo automático de notificação direta (Telegram + notificação web persistida) ao dono do agendamento sempre que um Administrador realizar qualquer alteração, reagendamento ou cancelamento na sua reserva, contendo o nome do administrador responsável, equipamento e justificativa operacional.
+     - **Alerta de Cancelamento de Reserva:** Notificação imediata ao membro caso sua reserva seja cancelada administrativamente.
+      - **Alerta Preditivo de Término de Garantia de Calibração/Manutenção:** Disparo proativo ao coordenador e técnicos quando uma manutenção ou calibração executada estiver próxima de expirar a garantia (com antecedência configurável pelo usuário, ex: 15 dias), sinalizando a necessidade de recontratação ou novo ciclo de aferição metrológica antes do bloqueio de uso do equipamento.
+     - **Alerta Matinal de Calibração e Manutenção Preventiva:** Aviso automático às 08h00 sobre equipamentos com calibração vencida ou próxima ao vencimento.
+     - **Alerta de Estoque Crítico:** Notificação aos coordenadores quando itens atingem estoque zero ou forem sinalizados para compra urgente.
+     - **Briefing Noturno Diário (17h30):** Envio de agenda personalizada para analistas com ensaios programados no dia útil seguinte.
+
+
+
+4. **Controle de Garantias e Ciclo de Recalibração Metrológica (ISO/IEC 17025):**
+   * **Registro Completo de Execução:** Ao registrar uma manutenção ou calibração no sistema, o usuário especifica a data de execução real, o responsável técnico/empresa externa, número do certificado/OS e custo.
+   * **Prazo de Garantia Parametrizável:** O usuário define o período de garantia da intervenção (opções rápidas: 30 dias, 90 dias, 180 dias / 6 meses, 365 dias / 1 ano, 730 dias / 2 anos ou valor customizado em dias).
+   * **Cálculo Automático de Vigência:** O sistema calcula automaticamente a data_fim_garantia (data_manutencao + tempo_garantia_dias) e sincroniza com a data limite do equipamento.
+   * **Monitoramento Preditivo de Recalibração:** O usuário define quantos dias antes do vencimento da garantia quer ser notificado (padrão de 15 dias). O scheduler diário das 08h00 e o botão manual no dashboard monitoram os prazos, geram notificações persistentes no banco de dados (Notificacao na categoria MANUTENCAO_ALERTA) e enviam avisos via Telegram aos administradores, evitando equipamentos operando sem garantia técnica válida.
+   * **Interface Visual com Badges Dinâmicos:** A tabela de histórico exibe o status em tempo real da garantia (Vigente, ⚠️ Vence em X dias, Expirada, Sem garantia), permitindo auditoria visual imediata.

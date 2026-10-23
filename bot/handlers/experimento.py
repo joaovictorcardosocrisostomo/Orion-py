@@ -16,6 +16,7 @@ from services.estoque import listar_itens # Altere para service_estoque se for o
 from services.rag import formatar_contexto_rag
 from services.llm import sintetizar_com_rag
 from services.scheduler import agendar_alarme_fim, agendar_alarme_inicio
+from services.relatorio_bancada import registrar_inicio_bancada, registrar_fim_bancada
 
 router = Router()
 
@@ -381,7 +382,47 @@ async def relampago_step3(callback: CallbackQuery):
         )
     else:
         await callback.message.edit_text(f"❌ <b>Conflito detectado:</b>\n{resposta['erro']}\n<i>Alguém já reservou o equipamento para este horário.</i>", parse_mode="HTML")
-        
+
+
+@router.callback_query(F.data.startswith("iniciar_"))
+async def botao_iniciar(callback: CallbackQuery):
+    """Inicia a sessão de bancada e dispara o cronômetro do tempo real de atividade."""
+    if callback.data is None:
+        return
+    if not isinstance(callback.message, Message):
+        await callback.answer("Erro: mensagem indisponível.", show_alert=True)
+        return
+
+    reserva_id_str = callback.data.replace("iniciar_", "")
+    alvos = _alvos_do_callback(reserva_id_str)
+    if not alvos:
+        await callback.answer("Reserva não localizada para iniciar.", show_alert=True)
+        return
+
+    nomes_itens = []
+    for alvo in alvos:
+        reserva = registrar_inicio_bancada(alvo["reserva_id"])
+        if reserva:
+            nomes_itens.append(alvo["nome_item"])
+
+    fuso = pytz.timezone("America/Fortaleza")
+    hora_agora = datetime.now(fuso).strftime("%H:%M")
+
+    teclado = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Sim, terminei", callback_data=f"finalizar_{reserva_id_str}")],
+        [InlineKeyboardButton(text="⏳ Preciso de +30 min", callback_data=f"estender_{reserva_id_str}")],
+    ])
+
+    await callback.message.edit_text(
+        f"▶️ <b>Sessão de Bancada Iniciada!</b>\n\n"
+        f"🔬 <b>Recurso(s):</b> {', '.join(nomes_itens)}\n"
+        f"⏱️ <b>Cronômetro ativo desde:</b> {hora_agora}\n\n"
+        f"<i>Ao terminar suas atividades, clique no botão abaixo para registrar o encerramento e atualizar o caderno:</i>",
+        reply_markup=teclado,
+        parse_mode="HTML"
+    )
+    await callback.answer("Experimento iniciado! Cronômetro de bancada ativo.")
+
 
 @router.callback_query(F.data.startswith("finalizar_"))
 async def botao_finalizar(callback: CallbackQuery, state: FSMContext):
@@ -398,17 +439,17 @@ async def botao_finalizar(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Reserva não encontrada!", show_alert=True)
         return
 
-    with Session(engine) as session:
-        for alvo in alvos:
-            reserva = session.get(Reserva, alvo["reserva_id"])
-            if reserva is None:
-                continue
-            reserva.status = StatusReserva.CONCLUIDO
-        session.commit()
+    tempo_total_minutos = 0
+    for alvo in alvos:
+        resultado = registrar_fim_bancada(alvo["reserva_id"])
+        if resultado and resultado.get("tempo_bancada_minutos"):
+            tempo_total_minutos = max(tempo_total_minutos, resultado["tempo_bancada_minutos"])
 
     # Fluxo de relatório: começa pelo primeiro recurso e mantém os demais na fila
     primeiro = alvos[0]
     await state.update_data(
+        reserva_id=str(primeiro["reserva_id"]),
+        tempo_minutos=tempo_total_minutos,
         item_id=str(primeiro["item_id"]),
         nome_item=primeiro["nome_item"],
         grupo_itens_pendentes=[
@@ -421,7 +462,11 @@ async def botao_finalizar(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="⚠️ Apresentou avaria/quebrou", callback_data="estado_avaria")]
     ])
 
-    texto_final = f"✅ <b>Experimento Concluído!</b>\nComo você deixou o <b>{primeiro['nome_item']}</b> após o uso?"
+    texto_final = (
+        f"✅ <b>Experimento Concluído!</b>\n"
+        f"⏱️ <b>Tempo de Bancada Registrado:</b> {tempo_total_minutos} min\n\n"
+        f"Como você deixou o <b>{primeiro['nome_item']}</b> após o uso?"
+    )
     if len(alvos) > 1:
         texto_final += f"\n<i>({len(alvos) - 1} outro(s) recurso(s) aguardando confirmação)</i>"
 

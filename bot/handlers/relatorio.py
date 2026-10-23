@@ -7,9 +7,11 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlmodel import Session
 
 from database.db import engine
-from database.models import Item, StatusItem
+from database.models import Item, StatusItem, CategoriaNotificacao
 from services.estoque import listar_itens
 from services.log_uso import registrar_log_uso
+from services.manutencao import abrir_chamado_corretivo
+from services.notificacoes import notificar_administradores
 
 router = Router()
 
@@ -58,6 +60,7 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
     item_id_str = dados.get("item_id")
     item_uuid = uuid.UUID(item_id_str) if item_id_str else None
     nome_item = dados.get("nome_item")
+    reserva_id_str = dados.get("reserva_id")
 
     if callback.data == "estado_bom":
         with Session(engine) as session:
@@ -86,8 +89,21 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_text(texto, reply_markup=teclado, parse_mode="HTML")
             return
 
-        await callback.message.edit_text(f"✅ Relatório salvo! Obrigado por cuidar do <b>{nome_item}</b>.", parse_mode="HTML")
-        await state.clear()
+        # Se veio de uma reserva, oferece registrar no Caderno de Laboratório
+        if reserva_id_str:
+            teclado_caderno = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📖 Registrar no Caderno de Bancada", callback_data=f"caderno_iniciar_{reserva_id_str}")],
+                [InlineKeyboardButton(text="✅ Concluir sem Anotações", callback_data="caderno_pular_fim")],
+            ])
+            await callback.message.edit_text(
+                f"✅ Relatório salvo! Obrigado por cuidar do <b>{nome_item}</b>.\n\n"
+                f"Deseja gerar uma entrada oficial no <b>Caderno de Laboratório (ELN)</b> com as observações do ensaio?",
+                reply_markup=teclado_caderno,
+                parse_mode="HTML"
+            )
+        else:
+            await callback.message.edit_text(f"✅ Relatório salvo! Obrigado por cuidar do <b>{nome_item}</b>.", parse_mode="HTML")
+            await state.clear()
 
     elif callback.data == "estado_avaria":
         # Em vez de fechar, avança a FSM para perguntar o que aconteceu!
@@ -97,11 +113,19 @@ async def processar_estado(callback: CallbackQuery, state: FSMContext):
         )
         await state.set_state(FSMRelatorio.aguardando_detalhes_avaria)
 
+@router.callback_query(F.data == "caderno_pular_fim")
+async def pular_caderno_fim(callback: CallbackQuery, state: FSMContext):
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text("✅ Sessão finalizada com sucesso! Bom descanso.", parse_mode="HTML")
+    await state.clear()
+    await callback.answer()
+
 @router.message(FSMRelatorio.aguardando_detalhes_avaria)
 async def processar_detalhes(message: Message, state: FSMContext):
     detalhes = message.text or "Avaria não detalhada"
     dados = await state.get_data()
     item_id_str = dados.get("item_id")
+    nome_item = dados.get("nome_item", "Equipamento")
     item_uuid = uuid.UUID(item_id_str) if item_id_str else None
     
     with Session(engine) as session:
@@ -119,11 +143,28 @@ async def processar_detalhes(message: Message, state: FSMContext):
             observacoes=f"Avaria: {detalhes}",
             reposicao_necessaria=False,
         )
+        # Abre ordem de serviço corretiva
+        abrir_chamado_corretivo(
+            item_id=item_uuid,
+            descricao_defeito=detalhes,
+            reportado_por=message.from_user.full_name or str(message.from_user.id),
+        )
+        # Dispara notificação imediata aos Administradores
+        await notificar_administradores(
+            titulo="🚨 Alerta de Equipamento com Avaria",
+            mensagem=(
+                f"O equipamento <b>{nome_item}</b> foi marcado como <b>QUEBRADO</b> pelo usuário "
+                f"<b>{message.from_user.full_name}</b>.\n\n"
+                f"<b>Detalhes relatados:</b> {detalhes}\n\n"
+                f"<i>O equipamento foi bloqueado para novos agendamentos no sistema.</i>"
+            ),
+            categoria=CategoriaNotificacao.MANUTENCAO_ALERTA
+        )
 
     await message.answer(
-        f"🚨 Relatório de avaria registrado!\n"
+        f"🚨 <b>Relatório de avaria registrado e ticket aberto!</b>\n"
         f"<i>Nota gravada: '{detalhes}'</i>\n"
-        f"O equipamento foi bloqueado para uso até a manutenção.",
+        f"O equipamento foi bloqueado e a coordenação/manutenção foi notificada.",
         parse_mode="HTML"
     )
     await state.clear()

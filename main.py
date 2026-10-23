@@ -19,6 +19,9 @@ from bot.handlers import (
     auditoria,
     adicionar_pop,
     dashboard,
+    caderno,
+    manutencao,
+    briefing,
 )
 from services.scheduler import iniciar_scheduler
 from api.dashboard import router as dashboard_api_router
@@ -43,6 +46,9 @@ routers = [
     dashboard.router,
     handler_estoque.router,
     relatorio.router,
+    caderno.router,
+    manutencao.router,
+    briefing.router,
     nlp.router,
     experimento.router,
     auditoria.router,
@@ -91,15 +97,31 @@ async def lifespan(app: FastAPI):
         pass
     logging.info("Bot e conexões parados.")
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(title="Orion Cientista API", lifespan=lifespan)
+
+# Middleware de Segurança Defensiva HTTP (Defesa em Profundidade)
+@app.middleware("http")
+async def security_headers_middleware(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(dashboard_api_router)
 
 @app.get("/")
 def read_root():
-    return {
-        "status": "Servidor Orion rodando. Bot via Polling.",
-        "dashboard_url": "/dashboard",
-    }
+    return RedirectResponse(url="/dashboard")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,20 @@ class StatusReserva(str, Enum):
     EM_ANDAMENTO = "Em andamento"
     NAO_REALIZADO = "Não Realizado"
 
+class TipoManutencao(str, Enum):
+    PREVENTIVA = "Preventiva"
+    CORRETIVA = "Corretiva"
+    CALIBRACAO = "Calibração Metrológica"
+    AJUSTE_ROTINA = "Ajuste de Rotina"
+
+class CategoriaNotificacao(str, Enum):
+    LEMBRETE_AGENDA = "Lembrete de Agendamento"
+    BRIEFING_NOTURNO = "Briefing de Planejamento"
+    MANUTENCAO_ALERTA = "Alerta de Manutenção"
+    ESTOQUE_CRITICO = "Estoque Crítico"
+    ADMIN_OVERRIDE = "Aviso Administrativo"
+    AUDITORIA_17H = "Auditoria Diária"
+
 # --- Tabelas Principais ---
 
 class Laboratorio(SQLModel, table=True):
@@ -50,9 +64,12 @@ class Usuario(SQLModel, table=True):
     nome: str
     nivel_acesso: NivelAcesso = Field(default=NivelAcesso.MEMBRO)
     modo_atual: str = Field(default="Normal")
+    senha_hash: Optional[str] = Field(default=None)
     
     reservas: List["Reserva"] = Relationship(back_populates="usuario")
     logs_uso: List["LogUso"] = Relationship(back_populates="usuario")
+    entradas_caderno: List["EntradaCadernoLaboratorio"] = Relationship(back_populates="usuario")
+    notificacoes: List["Notificacao"] = Relationship(back_populates="usuario")
 
 class Item(SQLModel, table=True):
     """Base unificada para Reagentes, Equipamentos, Vidrarias e Limpeza"""
@@ -76,10 +93,16 @@ class Item(SQLModel, table=True):
     # Controle de Manutenção
     estado: StatusItem = Field(default=StatusItem.BOM)
     ultima_manutencao: Optional[datetime] = None
+    frequencia_manutencao_dias: Optional[int] = None
+    proxima_manutencao: Optional[datetime] = None
+    horas_operacao_limite: Optional[int] = None
+    horas_operacao_acumuladas: float = Field(default=0.0)
+    responsavel_manutencao: Optional[str] = None
     arquivado: bool = Field(default=False)
 
     reservas: List["Reserva"] = Relationship(back_populates="item")
     logs_uso: List["LogUso"] = Relationship(back_populates="item")
+    manutencoes: List["RegistroManutencao"] = Relationship(back_populates="item")
 
 
 class Reserva(SQLModel, table=True):
@@ -95,6 +118,12 @@ class Reserva(SQLModel, table=True):
 
     # Agrupador de experimento: recursos de um MESMO agendamento compartilham o mesmo grupo_id
     grupo_id: Optional[uuid.UUID] = Field(default=None)
+
+    # Tempo real de bancada e métricas
+    inicio_real: Optional[datetime] = Field(default=None)
+    fim_real: Optional[datetime] = Field(default=None)
+    tempo_bancada_minutos: Optional[int] = Field(default=None)
+    desvio_planejado_minutos: Optional[int] = Field(default=None)
     
     usuario: Usuario = Relationship(back_populates="reservas")
     item: Item = Relationship(back_populates="reservas")
@@ -115,6 +144,70 @@ class LogUso(SQLModel, table=True):
     
     usuario: Usuario = Relationship(back_populates="logs_uso")
     item: Item = Relationship(back_populates="logs_uso")
+
+
+class RegistroManutencao(SQLModel, table=True):
+    """Histórico de Calibrações e Manutenções Preventivas/Corretivas"""
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    item_id: uuid.UUID = Field(foreign_key="item.id")
+    tipo: TipoManutencao = Field(default=TipoManutencao.PREVENTIVA)
+    data_manutencao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    data_proxima_prevista: Optional[datetime] = None
+    realizado_por: str = Field(default="Técnico do Laboratório")
+    descricao_servico: str
+    pecas_substituidas: Optional[str] = None
+    custo: Optional[float] = None
+    certificado_numero: Optional[str] = None
+    status_resultante: StatusItem = Field(default=StatusItem.BOM)
+
+    # Controle de Garantia e Recalibração Preditiva
+    tempo_garantia_dias: Optional[int] = Field(default=None) # Ex: 90, 180, 365 dias
+    data_fim_garantia: Optional[datetime] = Field(default=None) # Data calculada do término da garantia
+    notificar_antes_dias: int = Field(default=15) # Alerta prévio de expiração (dias antes)
+    garantia_notificada: bool = Field(default=False) # Evita disparo duplicado de alerta
+
+    item: Item = Relationship(back_populates="manutencoes")
+
+
+class EntradaCadernoLaboratorio(SQLModel, table=True):
+    """Registro estruturado de Caderno de Laboratório Eletrônico (ELN)"""
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    codigo_ensaio: str = Field(index=True)  # Ex: EXP-2026-0042
+    usuario_id: int = Field(sa_column=Column(BigInteger, ForeignKey("usuario.telegram_id")))
+    reserva_id: Optional[uuid.UUID] = Field(default=None, foreign_key="reserva.id")
+    protocolo_id: Optional[uuid.UUID] = Field(default=None, foreign_key="protocoloexperimental.id")
+
+    titulo: str
+    amostra_identificacao: Optional[str] = None
+    objetivo: Optional[str] = None
+    recursos_utilizados_json: Optional[str] = Field(default="{}")
+    etapas_executadas_json: Optional[str] = Field(default="[]")
+    dados_brutos_observacoes: Optional[str] = None
+    desvios_protocolo: Optional[str] = None
+
+    inicio_real: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    fim_real: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    tempo_bancada_minutos: int = Field(default=0)
+    status: str = Field(default="Finalizado") # Rascunho, Finalizado, Homologado
+    anexos_urls: Optional[str] = None
+    data_registro: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    usuario: Usuario = Relationship(back_populates="entradas_caderno")
+
+
+class Notificacao(SQLModel, table=True):
+    """Histórico e fila de notificações do sistema"""
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    usuario_id: int = Field(sa_column=Column(BigInteger, ForeignKey("usuario.telegram_id")))
+    categoria: CategoriaNotificacao
+    titulo: str
+    mensagem: str
+    enviado: bool = Field(default=False)
+    data_envio: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    lida: bool = Field(default=False)
+    erro_envio: Optional[str] = None
+
+    usuario: Usuario = Relationship(back_populates="notificacoes")
 
 
 class ProcedimentoRAG(SQLModel, table=True):

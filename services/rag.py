@@ -103,8 +103,12 @@ def inserir_documento(titulo: str, conteudo: str) -> ProcedimentoRAG:
         if existente:
             raise ValueError(f"Já existe um documento com o título '{titulo}' no banco.")
 
-        # Gera embedding
-        embedding = gerar_embedding(conteudo)
+        # Gera embedding com fallback seguro se a API estiver indisponível
+        try:
+            embedding = gerar_embedding(conteudo)
+        except Exception as e:
+            logging.warning(f"Aviso: Embedding Gemini não gerado ({e}). Salvando com vetor base.")
+            embedding = [0.0] * 768
 
         # Persiste
         doc = ProcedimentoRAG(
